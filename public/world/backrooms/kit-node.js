@@ -40,10 +40,10 @@ export function surfaceNode(spec) {
   const v2 = (key) => { const n = uniform(new N.Vector2()); return n.onRenderUpdate(() => { const v = read(key); if (Array.isArray(v)) n.value.fromArray(v); else if (v?.isVector2) n.value.copy(v); }); };
   const v3 = (key) => { const n = uniform(new N.Vector3(1, 1, 1)); return n.onRenderUpdate(() => { const v = read(key); if (Array.isArray(v)) n.value.fromArray(v); else if (v?.isVector3) n.value.copy(v); else if (v?.isColor) n.value.set(v.r, v.g, v.b); }); };
   const v4 = (key) => { const n = uniform(new N.Vector4()); return n.onRenderUpdate(() => { const v = read(key); if (Array.isArray(v)) n.value.fromArray(v); else if (v?.isVector4) n.value.copy(v); }); };
-  const ss = (e0, e1, x) => { const t = clamp(float(x).sub(e0).div(e1 - e0), 0, 1); return t.mul(t).mul(t.mul(-2).add(3)); };
+  const ss = (e0, e1, x) => { const t = clamp(float(x).sub(e0).div(e1 - e0), 0, 1).toVar(); return t.mul(t).mul(t.mul(-2).add(3)); };
   const voxHash = (p0) => { const p = fract(p0.mul(vec3(0.1031, 0.1030, 0.0973))); const q = p.add(dot(p, p.yxz.add(33.33))); return fract(q.x.add(q.y).mul(q.z)); };
   const surfaceBeam = (view, normal, origin, direction, coneCos, reach, att) => {
-    const offset = view.sub(origin), d = length(offset), ray = offset.div(max(d, 0.0001));
+    const offset = view.sub(origin).toVar(), d = length(offset).toVar(), ray = offset.div(max(d, 0.0001));
     const cone = ss(coneCos[0], coneCos[1], dot(ray, direction));
     const fade = float(1).sub(ss(reach[0], reach[1], d));
     const incidence = max(dot(normal, ray.negate()), 0);
@@ -112,13 +112,18 @@ export function surfaceNode(spec) {
       // (Medium, High: the room's light map, kit-node-light.js)
       const lightmapped = lightmapNode(m, D, { banks, aSurf, uDim, uTint, uFlick, uBanks, uMoreBanks, vAlb });
       if (lightmapped) c.assign(lightmapped(c));
-      const torchBeam = surfaceBeam(positionView, normal, uTorchOrigin, uTorchDirection, [FLASHLIGHT.edgeCos, FLASHLIGHT.coreCos], [FLASHLIGHT.fadeFrom, FLASHLIGHT.range], FLASHLIGHT.attenuation);
-      const lampBeam = surfaceBeam(positionView, normal, vec3(...CAMCORDER_LAMP.origin), vec3(...CAMCORDER_LAMP.direction), [CAMCORDER_LAMP.edgeCos, CAMCORDER_LAMP.coreCos], [CAMCORDER_LAMP.fadeFrom, CAMCORDER_LAMP.range], CAMCORDER_LAMP.attenuation);
-      let torchPart = select(uTorch.greaterThan(0.0001), uTorch.mul(torchBeam), 0);
       // (High: the flashlight's shadow, kit-node-shadow.js; only the torch's share is shadowed, never the camcorder lamp)
       const shadowed = beamShadowNode(m, D, uTorchOrigin);
-      if (shadowed) torchPart = select(torchPart.greaterThan(0), torchPart.mul(shadowed(positionView, normal)), torchPart);
-      const beam = torchPart.add(select(uLamp.greaterThan(0.0001), uLamp.mul(lampBeam), 0));
+      const beam = float(0).toVar();
+      // Uniform branch: skips beam math AND all 9 shadow PCF taps when torch is off; keeps textureSampleCompare in uniform control flow.
+      If(uTorch.greaterThan(0.0001), () => {
+        const torchPart = uTorch.mul(surfaceBeam(positionView, normal, uTorchOrigin, uTorchDirection, [FLASHLIGHT.edgeCos, FLASHLIGHT.coreCos], [FLASHLIGHT.fadeFrom, FLASHLIGHT.range], FLASHLIGHT.attenuation)).toVar();
+        if (shadowed) torchPart.mulAssign(shadowed(positionView, normal));
+        beam.addAssign(torchPart);
+      });
+      If(uLamp.greaterThan(0.0001), () => {
+        beam.addAssign(uLamp.mul(surfaceBeam(positionView, normal, vec3(...CAMCORDER_LAMP.origin), vec3(...CAMCORDER_LAMP.direction), [CAMCORDER_LAMP.edgeCos, CAMCORDER_LAMP.coreCos], [CAMCORDER_LAMP.fadeFrom, CAMCORDER_LAMP.range], CAMCORDER_LAMP.attenuation)));
+      });
       const torch = vAlb.mul(beam);
       let cell = null;
       if (D.VOXEL) {
@@ -137,7 +142,7 @@ export function surfaceNode(spec) {
           if (h.uv) mapUv = h.uv({ T, N, m, mapUv, uv: baseUv, localPos, localNormal, viewRayLocal, read, f, v2, v3, v4, ss, shared });
         }
         mapTex = texture(read('map')).onRenderUpdate(() => read('map'));
-        t = mapTex.sample(mapUv);
+        t = mapTex.sample(mapUv).toVar();
         if (D.CUTOUT) If(t.a.lessThan(0.5), () => { Discard(); });
         c.mulAssign(t.rgb);
       }

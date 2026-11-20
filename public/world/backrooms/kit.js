@@ -292,11 +292,52 @@ export function bake(batch, lights, amb, lighting = null, extra = null) {
  * shadowmap.js); without it, every share is whole.
  */
 export function lightAt(lights, amb, x, y, z, nx = 0, ny = 1, nz = 0, runtime = {}) {
-  const probe = { verts: 1, pos: [x, y, z], nor: [nx, ny, nz], alb: [1, 1, 1], ao: [1], sf: [0, 0], vox: false };
-  const { lit, flk, banks } = bake(probe, lights, amb, runtime.lighting);
-  const s = runtime.shade || NO_SHADE;
-  return [0, 1, 2].map((c) => lit[c] * (s[0] ?? 1) + (flk ? flk[c] * (runtime.flick ?? 1) * (s[1] ?? 1) : 0)
-    + (banks ? banks.reduce((sum,bank,b) => sum + bank[c] * (runtime.banks?.[b] ?? 1) * (s[2 + b] ?? 1),0) : 0));
+  const lighting = runtime.lighting || null;
+  const count = lighting ? lighting.bankCount || 2 : 0;
+  const shade = runtime.shade || NO_SHADE;
+  const s0 = shade[0] ?? 1;
+  const rBanks = runtime.banks;
+  const hemi = 0.8 + 0.2 * ny;
+  const base = 1 - (lighting?.ambientShare || 0);
+  let sr = amb[0] * hemi * base, sg = amb[1] * hemi * base, sb = amb[2] * hemi * base;
+  let fr = 0, fg = 0, fb = 0;
+  let br = 0, bg = 0, bb = 0;
+  for (let i = 0; i < lights.length; i++) {
+    const L = lights[i];
+    const dx = L.x - x, dy = L.y - y, dz = L.z - z, d2 = dx * dx + dy * dy + dz * dz + 0.02;
+    if (d2 > L.far2) continue;
+    const inv = 1 / Math.sqrt(d2);
+    let s = ((nx * dx + ny * dy + nz * dz) * inv + L.wrap) / (1 + L.wrap);
+    if (s <= 0) continue;
+    if (L.lobe) s *= L.floor + (1 - L.floor) * Math.max(0, -(dx * L.ax + dy * L.ay + dz * L.az) * inv);
+    const fade = 1 - d2 / L.far2;
+    s *= fade * fade / (1 + d2 / L.k);
+    const bk = L.bank;
+    if (lighting && Number.isInteger(bk) && bk >= 0 && bk < count) {
+      const w = (rBanks?.[bk] ?? 1) * (shade[2 + bk] ?? 1);
+      br += L.r * s * w; bg += L.g * s * w; bb += L.b * s * w;
+    } else if (L.flick) {
+      fr += L.r * s; fg += L.g * s; fb += L.b * s;
+    } else {
+      sr += L.r * s; sg += L.g * s; sb += L.b * s;
+    }
+  }
+  let r = sr * s0 + br, g = sg * s0 + bg, b = sb * s0 + bb;
+  if (fr + fg + fb > 1e-4) {
+    const fk = (runtime.flick ?? 1) * (shade[1] ?? 1);
+    r += fr * fk; g += fg * fk; b += fb * fk;
+  }
+  if (lighting) {
+    const ambShare = lighting.ambientShare || 0;
+    if (ambShare) {
+      const weights = bankWeights(lights, x, z, count, lighting.ceilingBanks || count);
+      let bankAmb = 0;
+      for (let k = 0; k < count; k++) bankAmb += weights[k] * (rBanks?.[k] ?? 1) * (shade[2 + k] ?? 1);
+      const kAmb = hemi * ambShare * bankAmb;
+      r += amb[0] * kAmb; g += amb[1] * kAmb; b += amb[2] * kAmb;
+    }
+  }
+  return [r, g, b];
 }
 const NO_SHADE = [];
 

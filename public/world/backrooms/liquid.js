@@ -379,7 +379,12 @@ export function createLiquidView() {
       if (!old.geometry.boundingBox) old.geometry.computeBoundingBox();
       rec.pairs.push({ old, water, material, rec });
     });
-    if (rec.pairs.length) rec.state = 'up'; else { rec.state = 'refused'; rec.reason = 'not a kit sheet'; rec.pairs = null; rec.wake = null; rec.disturb = null; }
+    if (rec.pairs.length) {
+      rec.state = 'up';
+      const standIns = [];
+      rec.rt.group.traverse((o) => { if (o.userData?.liquidStandIn) standIns.push(o); });
+      rec.standIns = standIns;
+    } else { rec.state = 'refused'; rec.reason = 'not a kit sheet'; rec.pairs = null; rec.wake = null; rec.disturb = null; rec.standIns = null; }
   }
   // the swell, once a frame for a surface that is up: its geometry and define on while one is asked for, off (the sheet's
   // own, no define: as it was) while none is; its uniforms; the rings where it breaks
@@ -400,7 +405,7 @@ export function createLiquidView() {
       if (p.dense === undefined) {
         const i = rec.meshes.indexOf(p.old);
         if (!ROOM_UP(rec.toRoom[i] || [])) { p.dense = null; rec.swellRefused = 'turned in its room'; }
-        else { const g = swellGeometry(p.old.geometry); p.dense = g.geometry; if (!g.geometry) rec.swellRefused = g.why; else rec.swellCost = { cols: g.cols, rows: g.rows, triangles: g.triangles }; }
+        else { const g = swellGeometry(p.old.geometry); p.dense = g.geometry; if (!g.geometry) rec.swellRefused = g.why; else { rec.kit?.own?.(p.dense); rec.swellCost = { cols: g.cols, rows: g.rows, triangles: g.triangles }; } }
       }
       if (!p.dense) on = false;
     }
@@ -523,8 +528,10 @@ export function createLiquidView() {
         // what a room draws itself in place of what the water now does (userData.liquidStandIn: the waterpark's pale splash
         // ring), hidden in each room whose surface is drawn this frame, before anything is drawn (the mirror too)
         const rooms = new Set();
-        for (const rec of list) if (rec.live && (!rec.under || rec.below) && rec.pairs?.some((p) => shown(p.old))) rooms.add(rec.rt.group);
-        for (const g of rooms) g.traverse((o) => { if (o.userData?.liquidStandIn && o.visible) { o.visible = false; stood.push(o); } });
+        for (const rec of list) if (rec.live && (!rec.under || rec.below) && rec.pairs?.some((p) => shown(p.old)) && !rooms.has(rec.rt.group)) {
+          rooms.add(rec.rt.group);
+          for (const o of rec.standIns || []) if (o.visible) { o.visible = false; stood.push(o); }
+        }
         // the mirror first (water 2, a surface chosen this frame): into its own picture, everything it changed put back
         stats.mirror.surfaces = 0;
         if (mirrorRec && level >= 2) {
@@ -614,7 +621,7 @@ export function createLiquidView() {
       for (const rec of collectLiquids(scene)) {
         if (rec.state !== 'up') continue;
         for (const p of rec.pairs) { p.water.parent?.remove(p.water); p.material.dispose(); p.under?.dispose(); p.dense?.dispose(); }
-        rec.pairs = null; rec.state = 'marked'; rec.live = false; rec.wake = null; rec.disturb = null;
+        rec.pairs = null; rec.state = 'marked'; rec.live = false; rec.wake = null; rec.disturb = null; rec.standIns = null;
         rec.swellU = null; rec.swellOn = false; rec.swellLast = null; rec.swellRefused = undefined;
       }
       body = null;

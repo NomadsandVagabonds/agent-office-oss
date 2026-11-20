@@ -102,7 +102,8 @@ function photo(c) {
   }
   // your place: a cross of tape and your name
   const mx = (gap - p.front / 2) * 0.68, tape = [0.9, 0.86, 0.72];
-  for (const rot of [0.785, -0.785]) c.lay(c.flat, mx, zFront, 0.5, 0.05, rot, null, tape, 0.012);
+  c.lay(c.flat, mx, zFront, 0.5, 0.05, 0.785, null, tape, 0.012);
+  c.lay(c.flat, mx, zFront, 0.5, 0.05, -0.785, null, tape, 0.0126);
   const name = card(c, 'spot' + c.level.name, [c.level.name.toUpperCase()], { w: 96, h: 28, bg: '#f4f0e2', edge: '#b9ad8a', size: 16 });
   c.lay(c.mapped('spot', name), mx, zFront + 0.42, 0.36, 0.105, 0, null, WHITE, 0.013);
   // the camera

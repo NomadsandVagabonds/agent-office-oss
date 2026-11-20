@@ -141,7 +141,7 @@ async function run() {
     const [{ openStage }, { pageRendererChoice }, { enterBackrooms }, { ARCHETYPES }] = await Promise.all([
       import('./world/engine/stage.js'), import('./world/engine/gpu.js'), import('./world/backrooms/index.js'), import('./world/backrooms/gen.js')]);
     // (the renderer: WebGL, as always, unless ?gpu=webgpu or a shell's stored choice asks for WebGPU: engine/gpu.js)
-    office.stage = await openStage(document.getElementById('stage'), { renderer: pageRendererChoice(), fx: false, shadows: false, pixelRatio: Math.min(window.devicePixelRatio || 1, 1.5) });
+    office.stage = await openStage(document.getElementById('stage'), { renderer: pageRendererChoice(), fx: false, antialias: false, shadows: false, pixelRatio: Math.min(window.devicePixelRatio || 1, 1.5) });
     office.stage.start();
     // the tape this address names, if it names one, is the building walked; with none, one nobody has had. When it
     // is over the card comes up, and after the card the front page — unless the card for a kept tape is put down by

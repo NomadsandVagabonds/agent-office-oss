@@ -55,21 +55,21 @@ export function towelCart(variant) {
 }
 
 function rulesTexture(kit) {
-  return kit.tex.custom('return-pool:hotel-rules', 768, 1024, g => {
+  return kit.tex.custom('return-pool:hotel-rules', 384, 512, g => {
     const paper = '#d3d0a9', ink = '#244b43', faded = '#697c64', red = '#8f4635';
-    g.fillStyle = paper; g.fillRect(0, 0, 768, 1024);
-    g.strokeStyle = ink; g.lineWidth = 10; g.strokeRect(19, 19, 730, 986);
-    g.lineWidth = 2; g.strokeRect(31, 31, 706, 962);
-    g.textAlign = 'center'; g.fillStyle = ink; g.font = '24px serif';
-    g.fillText('H O T E L   M E R I D I A N', 384, 74);
-    g.font = 'bold 78px sans-serif'; g.fillText('POOL RULES', 384, 157);
-    g.font = '19px monospace'; g.fillText('FOR THE COMFORT OF ALL REMAINING GUESTS', 384, 196);
+    g.fillStyle = paper; g.fillRect(0, 0, 384, 512);
+    g.strokeStyle = ink; g.lineWidth = 5; g.strokeRect(9.5, 9.5, 365, 493);
+    g.lineWidth = 1; g.strokeRect(15.5, 15.5, 353, 481);
+    g.textAlign = 'center'; g.fillStyle = ink; g.font = '12px serif';
+    g.fillText('H O T E L   M E R I D I A N', 192, 37);
+    g.font = 'bold 39px sans-serif'; g.fillText('POOL RULES', 192, 78.5);
+    g.font = '9.5px monospace'; g.fillText('FOR THE COMFORT OF ALL REMAINING GUESTS', 192, 98);
     const line = points => { g.beginPath(); points.forEach(([x,y],i) => i ? g.lineTo(x,y) : g.moveTo(x,y)); g.stroke(); };
-    const head = (x,y,r=9) => {g.beginPath();g.arc(x,y,r,0,Math.PI*2);g.fill();};
+    const head = (x,y,r=4.5) => {g.beginPath();g.arc(x,y,r,0,Math.PI*2);g.fill();};
     const person = (x,y,stretch=1) => {
-      head(x,y); line([[x,y+14],[x,y+45*stretch]]);
-      line([[x-20,y+31],[x,y+20],[x+22,y+36]]);
-      line([[x-22,y+70*stretch],[x,y+45*stretch],[x+20,y+70*stretch]]);
+      head(x,y); line([[x,y+7],[x,y+22.5*stretch]]);
+      line([[x-10,y+15.5],[x,y+10],[x+11,y+18]]);
+      line([[x-11,y+35*stretch],[x,y+22.5*stretch],[x+10,y+35*stretch]]);
     };
     const rows = [
       ['WALK. DO NOT RUN.', 'It has right of way.'],
@@ -78,42 +78,42 @@ function rulesTexture(kit) {
       ['DO NOT FEED THE DRAIN.', 'Lost property is not returned.'],
     ];
     rows.forEach(([title,sub],i) => {
-      const y=243+i*157;
-      g.strokeStyle=faded;g.lineWidth=1;line([[54,y-17],[714,y-17]]);
-      g.save();g.translate(57,y);g.fillStyle=ink;g.strokeStyle=ink;g.lineWidth=8;g.lineCap='square';
-      g.strokeRect(0,0,126,118);
+      const y=121.5+i*78.5;
+      g.strokeStyle=faded;g.lineWidth=1;line([[27,y-8.5],[357,y-8.5]]);
+      g.save();g.translate(28.5,y);g.fillStyle=ink;g.strokeStyle=ink;g.lineWidth=4;g.lineCap='square';
+      g.strokeRect(0,0,63,59);
       if(i===0) {
-        person(62,18); line([[62,63],[29,68],[14,95]]); // one leg too many
-        g.strokeStyle=red;g.lineWidth=6;line([[6,112],[119,7]]);
+        person(31,9); line([[31,31.5],[14.5,34],[7,47.5]]); // one leg too many
+        g.strokeStyle=red;g.lineWidth=3;line([[3,56],[59.5,3.5]]);
       } else if(i===1) {
-        person(63,28);line([[15,32],[15,9],[99,9]]);
-        for(const x of [38,63,88]) {line([[x,8],[x,21]]);line([[x-4,13],[x,8],[x+4,13]]);}
+        person(31.5,14);line([[7.5,16],[7.5,4.5],[49.5,4.5]]);
+        for(const x of [19,31.5,44]) {line([[x,4],[x,10.5]]);line([[x-2,6.5],[x,4],[x+2,6.5]]);}
       } else if(i===2) {
-        person(39,20,.7);g.save();g.translate(126,118);g.rotate(Math.PI);person(35,17,.75);g.restore();
-        g.lineWidth=3;line([[13,60],[112,60]]);
+        person(19.5,10,.7);g.save();g.translate(63,59);g.rotate(Math.PI);person(17.5,8.5,.75);g.restore();
+        g.lineWidth=1.5;line([[6.5,30],[56,30]]);
       } else {
-        person(33,16,.8);line([[48,45],[79,55]]);head(82,69,4);
-        g.fillRect(63,91,54,8);g.fillStyle=paper;
-        for(let j=0;j<5;j++)g.fillRect(68+j*9,87,4,9);
+        person(16.5,8,.8);line([[24,22.5],[39.5,27.5]]);head(41,34.5,2);
+        g.fillRect(31.5,45.5,27,4);g.fillStyle=paper;
+        for(let j=0;j<5;j++)g.fillRect(34+j*4.5,43.5,2,4.5);
       }
-      g.restore();g.textAlign='left';g.fillStyle=ink;g.font='bold 28px sans-serif';g.fillText(title,211,y+39);
-      g.fillStyle=faded;g.font='22px serif';g.fillText(sub,211,y+83);
+      g.restore();g.textAlign='left';g.fillStyle=ink;g.font='bold 14px sans-serif';g.fillText(title,105.5,y+19.5);
+      g.fillStyle=faded;g.font='11px serif';g.fillText(sub,105.5,y+41.5);
     });
-    g.textAlign='center';g.fillStyle=red;g.font='bold 27px monospace';g.fillText('POOL CLOSES AT 00:00',384,921);
-    g.fillStyle=ink;g.font='20px serif';g.fillText('Please collect all of your belongings.',384,961);
+    g.textAlign='center';g.fillStyle=red;g.font='bold 13.5px monospace';g.fillText('POOL CLOSES AT 00:00',192,460.5);
+    g.fillStyle=ink;g.font='10px serif';g.fillText('Please collect all of your belongings.',192,480.5);
     // A badly registered reprint, missing type strokes and long mineral runs.
-    g.globalAlpha=.13;g.fillStyle=red;g.font='bold 78px sans-serif';g.fillText('POOL RULES',389,161);g.globalAlpha=1;
+    g.globalAlpha=.13;g.fillStyle=red;g.font='bold 39px sans-serif';g.fillText('POOL RULES',194.5,80.5);g.globalAlpha=1;
     for(let i=0;i<75;i++) {
       g.fillStyle=i%3===0?'#64735c38':'#efe5ba62';
-      const x=42+(i*107)%680,y=38+(i*137)%930;
-      g.fillRect(x,y,2+i%5,14+(i*19)%97);
+      const x=21+((i*107)%680)*0.5,y=19+((i*137)%930)*0.5;
+      g.fillRect(x,y,(2+i%5)*0.5,(14+(i*19)%97)*0.5);
     }
     g.fillStyle=paper;
-    for(const [x,y,w,h] of [[176,119,28,5],[430,138,63,4],[281,275,44,3],[472,605,27,4],[405,903,51,5]])g.fillRect(x,y,w,h);
+    for(const [x,y,w,h] of [[88,59.5,14,2.5],[215,69,31.5,2],[140.5,137.5,22,1.5],[236,302.5,13.5,2],[202.5,451.5,25.5,2.5]])g.fillRect(x,y,w,h);
     // Peeling lower corner, split laminate and dead screw heads.
-    g.fillStyle='#8d967b';g.beginPath();g.moveTo(684,991);g.lineTo(734,926);g.lineTo(735,990);g.fill();
-    g.strokeStyle='#807d5e';g.lineWidth=2;line([[720,45],[695,104],[707,145],[684,190]]);
-    for(const x of [44,724])for(const y of [45,977]){g.fillStyle='#706a50';head(x,y,5);g.strokeStyle=paper;g.lineWidth=1;line([[x-3,y],[x+3,y]]);}
+    g.fillStyle='#8d967b';g.beginPath();g.moveTo(342,495.5);g.lineTo(367,463);g.lineTo(367.5,495);g.fill();
+    g.strokeStyle='#807d5e';g.lineWidth=1;line([[360,22.5],[347.5,52],[353.5,72.5],[342,95]]);
+    for(const x of [22,362])for(const y of [22.5,488.5]){g.fillStyle='#706a50';head(x,y,2.5);g.strokeStyle=paper;g.lineWidth=1;line([[x-1.5,y],[x+1.5,y]]);}
   }, {clamp:true});
 }
 

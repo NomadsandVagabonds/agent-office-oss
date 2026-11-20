@@ -26,7 +26,8 @@ export function createBeamShadows(renderer) {
   const toPictureGPU = new THREE.Matrix4().set(0.5, 0, 0, 0.5, 0, 0.5, 0, 0.5, 0, 0, 1, 0, 0, 0, 0, 1);
   const isNode = () => !!(renderer?.isWebGPURenderer && gpu.nodes);
   let target = null, size = 0;
-  const patched = new Set(), depths = new Map(), list = [], swapped = [], hidden = [];
+  const patched = new Set(), depths = new Map(), depthCleanups = new Map(), list = [], swapped = [], hidden = [];
+  const origin = [0, 0, 0], direction = [0, 0, 0], poseScratch = { origin, direction };
   const forget = (e) => patched.delete(e.target);
   const stats = { drawn: false, calls: 0, triangles: 0, casters: 0, receivers: 0 };
 
@@ -38,7 +39,7 @@ export function createBeamShadows(renderer) {
       depth.type = N.UnsignedIntType;
       depth.compareFunction = N.LessEqualCompare;
       depth.minFilter = depth.magFilter = N.LinearFilter;
-      target = new N.RenderTarget(res, res, { depthBuffer: true, depthTexture: depth, generateMipmaps: false });
+      target = new N.RenderTarget(res, res, { format: N.RedFormat, type: N.UnsignedByteType, depthBuffer: true, depthTexture: depth, generateMipmaps: false });
       size = res;
       uniforms.uBeamShadowMap.value = depth;
       return;
@@ -50,6 +51,21 @@ export function createBeamShadows(renderer) {
     target = new THREE.WebGLRenderTarget(res, res, { format: THREE.RedFormat, type: THREE.UnsignedByteType, depthBuffer: true, depthTexture: depth, generateMipmaps: false });
     size = res;
     uniforms.uBeamShadowMap.value = depth;
+    // Allocate the WebGL2 depth attachment immediately so sampler2DShadow has a valid
+    // COMPARE_REF_TO_TEXTURE backing store even when warm() patches materials while the torch is off.
+    if (renderer?.setRenderTarget) {
+      const was = renderer.getRenderTarget?.() ?? null;
+      const autoClear = renderer.autoClear;
+      try {
+        renderer.setRenderTarget(target);
+        renderer.autoClear = false;
+        renderer.state?.buffers?.depth?.setMask?.(true);
+        renderer.clear?.(false, true, false);
+      } finally {
+        renderer.autoClear = autoClear;
+        renderer.setRenderTarget(was);
+      }
+    }
   }
   function patch(m) {
     m.defines = m.defines || {};
@@ -62,6 +78,8 @@ export function createBeamShadows(renderer) {
   function off() {
     for (const m of patched) { delete m.defines.BEAM_SHADOWS; m.rebuildNode?.(); m.needsUpdate = true; m.removeEventListener('dispose', forget); }
     patched.clear();
+    for (const { cut, onDispose } of depthCleanups.values()) cut.removeEventListener?.('dispose', onDispose);
+    depthCleanups.clear();
     for (const m of depths.values()) m.dispose();
     depths.clear();
     target?.dispose(); target?.depthTexture?.dispose(); target = null; size = 0;
@@ -83,6 +101,16 @@ export function createBeamShadows(renderer) {
           polygonOffset: true, polygonOffsetFactor: BEAM_SHADOW.polygonOffset[0], polygonOffsetUnits: BEAM_SHADOW.polygonOffset[1] });
       }
       depths.set(key, d);
+      if (cut?.addEventListener) {
+        const onDispose = () => {
+          cut.removeEventListener('dispose', onDispose);
+          depthCleanups.delete(key);
+          const dm = depths.get(key);
+          if (dm) { depths.delete(key); dm.dispose(); }
+        };
+        cut.addEventListener('dispose', onDispose);
+        depthCleanups.set(key, { cut, onDispose });
+      }
     }
     return d;
   }
@@ -96,13 +124,15 @@ export function createBeamShadows(renderer) {
     res = beamShadowSize(res);
     stats.drawn = false; stats.calls = stats.triangles = stats.casters = stats.receivers = 0;
     if (!res) { if (target || patched.size) off(); return stats; }
-    const frustum = beamFrustum({ origin: shared.uTorchOrigin.value.toArray(), direction: shared.uTorchDirection.value.toArray() }, res);
+    shared.uTorchOrigin.value.toArray(origin);
+    shared.uTorchDirection.value.toArray(direction);
+    const frustum = beamFrustum(poseScratch, res);
     if (!frustum || !(shared.uTorch.value > 0.0001)) { uniforms.uBeamShadowK.value.set(1 / res, 0); return stats; }
     if (size !== res) make(res);
 
     // what is in view: take the shadow (kit surfaces, once each), throw it, or neither
     list.length = 0;
-    for (const s of scenes) s.traverseVisible((o) => { if (o.isMesh) list.push(o); });
+    for (const s of scenes) { if (!s || !s.visible) continue; s.traverseVisible((o) => { if (o.isMesh) list.push(o); }); }
     for (const o of list) {
       if (receivesBeamShadow(o)) { stats.receivers++; if (!patched.has(o.material)) patch(o.material); }
       if (castsBeamShadow(o)) { swapped.push(o, o.material); o.material = Array.isArray(o.material) ? o.material.map(depthFor) : depthFor(o.material); stats.casters++; }
@@ -133,6 +163,7 @@ export function createBeamShadows(renderer) {
       renderer.state?.buffers?.depth?.setMask?.(true);       // (a see-through mesh drawn before may have left depth writes off)
       renderer.clear(false, true, false);
       for (const s of scenes) {
+        if (!s || !s.visible) continue;
         const bg = s.background; s.background = null;
         try { renderer.render(s, cam); } finally { s.background = bg; }
       }
@@ -149,13 +180,18 @@ export function createBeamShadows(renderer) {
     return stats;
   }
 
-  /** Pre-patch receiving surfaces during floor build so crossing doorways never stalls with mid-walk shader rebuilds. */
+  /** Pre-patch receiving surfaces and pre-create caster depth materials during floor build so crossing doorways never stalls. */
   function warm(res, scene) {
     res = beamShadowSize(res);
     if (!res || !scene) return;
     if (size !== res) make(res);
     scene.traverse((o) => {
-      if (o.isMesh && receivesBeamShadow(o) && !patched.has(o.material)) patch(o.material);
+      if (!o.isMesh) return;
+      if (receivesBeamShadow(o) && !patched.has(o.material)) patch(o.material);
+      if (castsBeamShadow(o)) {
+        if (Array.isArray(o.material)) { for (const mat of o.material) depthFor(mat); }
+        else depthFor(o.material);
+      }
     });
   }
 

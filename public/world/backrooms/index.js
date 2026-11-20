@@ -291,7 +291,7 @@ async function visit(office, opt) {
       if (cur?.player) cur.player.me.shake = lv === 2 ? 1 : lv === 1 ? 0.5 : 0.25;
       pictureKey = '';
     }
-    if (key === 'graphics') { gfxAuto = settings.graphics === 'auto' ? autoStart() : null; vhs.setProfile(gfx()); pictureKey = ''; showDetail(root, gfx()); }
+    if (key === 'graphics') { gfxAuto = settings.graphics === 'auto' ? autoStart() : null; vhs.setProfile(gfx()); pictureKey = ''; showDetail(root, gfx()); if (gfx().beamShadows > 0 && cur?.world?.scene) beamShadows.warm?.(gfx().beamShadows, cur.world.scene); }
     prefs.save(settings); menu?.update({ ...settings, scoreEligible: difficulty.report().ranked });
   }
   function setPicture(lv) { changeSetting('vhs', lv); }

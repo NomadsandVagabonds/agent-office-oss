@@ -782,8 +782,8 @@ export function makePeelTexture(look = {}) {
     g.clearRect(0, 0, W, H);
     const seed = colorSeed(wall, 67);
 
-    // Subtle vertical glued seam anchor line along left edge
-    P(g, 'rgba(42,36,26,0.42)', 4, 4, 2, H - 8);
+    // Subtle vertical glued seam anchor line along left edge (alpha >= 0.5 to survive cutout)
+    P(g, 'rgba(42,36,26,0.78)', 4, 4, 2, H - 8);
 
     const yStart = 8, yEnd = 120;
     for (let y = yStart; y < yEnd; y += 4) {
@@ -836,11 +836,6 @@ export function makePeelTexture(look = {}) {
         const mx = faceX + (pattern === 'stripes' ? 2 : ((rowIdx % 2) * 2) % Math.max(2, faceW - 2));
         P(g, ink, mx, y, Math.min(4, faceX + faceW - mx), 4);
       }
-
-      // Soft right-side transition shadow back onto flat wall
-      if (faceX + faceW < W - 2) {
-        P(g, 'rgba(34,28,18,0.22)', faceX + faceW, y, 4, 4);
-      }
     }
   }, {
     wrapS: THREE.ClampToEdgeWrapping,
@@ -885,9 +880,9 @@ export function makePuddleMaskTexture() {
           // Shallow translucent damp body
           P(g, 'rgba(34,38,32,0.62)', px, py, 4, 4);
         } else if (d < 0.90) {
-          // Meniscus rim with subtle upper-left catch-light tint
+          // Meniscus rim with subtle upper-left catch-light tint (alpha >= 0.62 to survive cutout)
           const rimBright = (px - 60) + (py - 64) < 8;
-          P(g, rimBright ? 'rgba(148,158,144,0.38)' : 'rgba(48,52,44,0.40)', px, py, 4, 4);
+          P(g, rimBright ? 'rgba(148,158,144,0.68)' : 'rgba(48,52,44,0.62)', px, py, 4, 4);
         } else {
           // Feathered damp alpha edge
           P(g, 'rgba(54,52,40,0.18)', px, py, 4, 4);
@@ -895,9 +890,9 @@ export function makePuddleMaskTexture() {
       }
     }
 
-    // Two tiny detached 4×4 splash droplets near the puddle perimeter
-    P(g, 'rgba(34,38,32,0.52)', 96, 84, 4, 4);
-    P(g, 'rgba(34,38,32,0.44)', 24, 44, 4, 4);
+    // Two tiny detached 4×4 splash droplets near the puddle perimeter (alpha >= 0.65 to survive cutout)
+    P(g, 'rgba(34,38,32,0.65)', 96, 84, 4, 4);
+    P(g, 'rgba(34,38,32,0.65)', 24, 44, 4, 4);
   }, {
     wrapS: THREE.ClampToEdgeWrapping,
     wrapT: THREE.ClampToEdgeWrapping,

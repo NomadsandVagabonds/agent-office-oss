@@ -83,7 +83,7 @@ import { DECK } from '../backrooms/gen.js';
 
 const q = new URLSearchParams(location.search);
 const num = (k, d) => (q.has(k) && q.get(k) !== '' && Number.isFinite(Number(q.get(k))) ? Number(q.get(k)) : d);
-const stage = await openStage(document.getElementById('stage'), { renderer: pageRendererChoice(), fx: q.get('fx') === '1', shadows: false, preserve: true, pixelRatio: num('dpr', 1) });
+const stage = await openStage(document.getElementById('stage'), { renderer: pageRendererChoice(), fx: q.get('fx') === '1', antialias: false, shadows: false, preserve: true, pixelRatio: num('dpr', 1) });
 stage.start();
 window.__stage = stage;              // renderer.info, for checking that a visit leaves nothing behind
 // &perf=1 / &bench=1: the measuring tape, only fetched when asked for

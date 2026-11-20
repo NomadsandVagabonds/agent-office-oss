@@ -444,7 +444,11 @@ function isTileFlatAndValid(room, tx, tz, minCeil = 2.05) {
   return true;
 }
 
-function collectFreeCeilingTiles(room) {
+function tileKey(tx, tz) {
+  return `${tx.toFixed(2)},${tz.toFixed(2)}`;
+}
+
+function collectFreeCeilingTiles(room, holeTiles = null) {
   const out = [];
   const ix0 = Math.floor((-room.W / 2 + 0.06) / TILE);
   const ix1 = Math.ceil((room.W / 2 - 0.06) / TILE);
@@ -455,6 +459,7 @@ function collectFreeCeilingTiles(room) {
       const tx = (ix + 0.5) * TILE, tz = (iz + 0.5) * TILE;
       if (!isTileFlatAndValid(room, tx, tz)) continue;
       if (tileOverlapsPanel(room, tx, tz)) continue;
+      if (holeTiles?.has(tileKey(tx, tz))) continue;
       out.push({ tx, tz, key: `${ix},${iz}`, ceilY: ceilAt(room, tx, tz) });
     }
   }
@@ -475,6 +480,7 @@ function pickClearSpot(c, rng, r = 0.45, opt = {}) {
       const tx = snapTileCoord(x, W / 2), tz = snapTileCoord(z, D / 2);
       if (opt.flatCeil && !isTileFlatAndValid(room, tx, tz, head || 2.0)) continue;
       if (opt.avoidPanels && tileOverlapsPanel(room, tx, tz)) continue;
+      if (c.rt?.holeTiles?.has(tileKey(tx, tz))) continue;
     }
     return { x, z };
   }
@@ -559,6 +565,23 @@ function scheduleAfter(c, fn) {
   else fn();
 }
 
+function wearCache(kit) {
+  return (kit._wearCache ||= {});
+}
+
+function roomLightScale(rt) {
+  const dim = rt?.u?.dim?.value ?? 1;
+  const levels = rt?.lightLevels;
+  let bank = 1;
+  if (rt?.lighting && Array.isArray(levels) && levels.length) {
+    const n = Math.min(rt.lighting.ceilingBanks || levels.length, levels.length);
+    let sum = 0;
+    for (let i = 0; i < n; i++) sum += levels[i];
+    bank = n > 0 ? sum / n : (levels[0] ?? 1);
+  }
+  return clamp(dim * bank, 0.08, 1);
+}
+
 /* ---- public API: buildLeakSpot ------------------------------------------------- */
 
 /**
@@ -577,14 +600,19 @@ export function buildLeakSpot(c, x, z, rng, opt = {}) {
   const ceilY = ceilAt(room, tileX, tileZ);
   const floorY = floorAt(room, x, z);
 
-  // 1. Ceiling water-stained tile snapped to 0.6 m grid
-  const ceilHex = c.look?.ceil || '#d6d0bc';
-  const waterTex = c.kit.tex.waterTile?.(ceilHex) || fallbackWaterTile(c.kit, ceilHex);
-  const wtBatch = c.mapped('office-watertile', waterTex, { detail: true });
-  const tileRot = localRng.pick([0, Math.PI / 2, Math.PI, Math.PI * 1.5]);
-  c.lay(wtBatch, tileX, tileZ, TILE, TILE, tileRot, null, WHITE, ceilY - 0.003, true);
-  // Subtle damp halo bleeding across the T-bar seam
-  c.blot(tileX, tileZ, TILE * 0.92, TILE * 0.86, { rgb: [0.16, 0.11, 0.03], a: 0.22, y: ceilY - 0.004, down: true });
+  // 1. Ceiling water-stained tile snapped to 0.6 m grid (only on intact flat tiles clear of panels & holes)
+  const tileBlocked = !isTileFlatAndValid(room, tileX, tileZ, 1.8)
+    || tileOverlapsPanel(room, tileX, tileZ)
+    || c.rt?.holeTiles?.has(tileKey(tileX, tileZ));
+  if (!tileBlocked) {
+    const ceilHex = c.look?.ceil || '#d6d0bc';
+    const waterTex = c.kit.tex.waterTile?.(ceilHex) || fallbackWaterTile(c.kit, ceilHex);
+    const wtBatch = c.mapped('office-watertile', waterTex, { detail: true, noBeamShadow: true });
+    const tileRot = localRng.pick([0, Math.PI / 2, Math.PI, Math.PI * 1.5]);
+    c.lay(wtBatch, tileX, tileZ, TILE, TILE, tileRot, null, WHITE, ceilY - 0.003, true);
+    // Subtle damp halo bleeding across the T-bar seam (staggered below tile to prevent Z-fighting)
+    c.blot(tileX, tileZ, TILE * 0.92, TILE * 0.86, { rgb: [0.16, 0.11, 0.03], a: 0.22, y: ceilY - 0.0046, down: true });
+  }
 
   // 2. Damp wicked carpet under-stain + glossy wet translucent floor puddle
   const pw = opt.puddleW ?? localRng.range(0.64, 1.04);
@@ -645,12 +673,16 @@ export function buildLeakSpot(c, x, z, rng, opt = {}) {
     const dripRng = localRng.fork('drip');
 
     let dropMesh = null;
+    let dropMat = null;
     let rippleMesh = null;
     let rippleMat = null;
 
     scheduleAfter(c, () => {
-      const dropGeo = c.kit.own(new THREE.BoxGeometry(0.018, 0.032, 0.018));
-      const dropMat = c.kit.own(new THREE.MeshBasicMaterial({ color: 0xdce8dc, transparent: true, opacity: 0.82 }));
+      const cache = wearCache(c.kit);
+      const dropGeo = (cache.dropGeo ||= c.kit.own(new THREE.BoxGeometry(0.018, 0.032, 0.018)));
+      const lScale = roomLightScale(c.rt);
+      dropMat = c.kit.own(new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.78 }));
+      dropMat.color.setRGB(0.76 * lScale, 0.81 * lScale, 0.76 * lScale);
       dropMesh = new THREE.Mesh(dropGeo, dropMat);
       dropMesh.name = 'office-drip-drop';
       dropMesh.castShadow = false;
@@ -660,14 +692,15 @@ export function buildLeakSpot(c, x, z, rng, opt = {}) {
       dropMesh.userData.officeWear = 'drip';
       attachToRoom(c, dropMesh);
 
-      const ripGeo = c.kit.own(new THREE.RingGeometry(0.02, 0.035, 16));
+      const ripGeo = (cache.ripGeo ||= c.kit.own(new THREE.RingGeometry(0.02, 0.035, 16)));
       rippleMat = c.kit.own(new THREE.MeshBasicMaterial({
-        color: 0xe8f0e4,
+        color: 0xffffff,
         transparent: true,
         opacity: RIPPLE_BASE_OPACITY,
         depthWrite: false,
         side: THREE.DoubleSide,
       }));
+      rippleMat.color.setRGB(0.82 * lScale, 0.86 * lScale, 0.80 * lScale);
       rippleMesh = new THREE.Mesh(ripGeo, rippleMat);
       rippleMesh.name = 'office-drip-ripple';
       rippleMesh.castShadow = false;
@@ -693,6 +726,7 @@ export function buildLeakSpot(c, x, z, rng, opt = {}) {
       const step = clamp(Number.isFinite(dt) ? dt : 0, 0, 0.1);
       if (step <= 0) return;
 
+      const lScale = roomLightScale(c.rt);
       if (phase === 'wait') {
         timer += step;
         if (timer >= waitDur) {
@@ -703,6 +737,7 @@ export function buildLeakSpot(c, x, z, rng, opt = {}) {
           dropMesh.visible = true;
           dropMesh.position.set(dripX, startY, dripZ);
           dropMesh.scale.set(0.35, 0.25, 0.35);
+          dropMat.color.setRGB(0.76 * lScale, 0.81 * lScale, 0.76 * lScale);
         }
       } else if (phase === 'form') {
         timer += step;
@@ -711,6 +746,7 @@ export function buildLeakSpot(c, x, z, rng, opt = {}) {
         dropMesh.visible = true;
         dropMesh.position.set(dripX, startY - 0.014 * u, dripZ);
         dropMesh.scale.set(s, 0.25 + 0.9 * u, s);
+        dropMat.color.setRGB(0.76 * lScale, 0.81 * lScale, 0.76 * lScale);
         if (u >= 1) {
           phase = 'fall';
           dropY = startY - 0.014;
@@ -732,6 +768,7 @@ export function buildLeakSpot(c, x, z, rng, opt = {}) {
           rippleMesh.position.set(dripX, hitY + 0.004, dripZ);
           rippleMesh.scale.setScalar(1);
           rippleMat.opacity = RIPPLE_BASE_OPACITY;
+          rippleMat.color.setRGB(0.82 * lScale, 0.86 * lScale, 0.80 * lScale);
           // Quiet sparse spatial drop audio within 7.5 m
           if (me && typeof c.env?.sound?.play === 'function') {
             const dist = Math.hypot((me.x ?? 99) - dripX, (me.z ?? 99) - dripZ);
@@ -748,6 +785,7 @@ export function buildLeakSpot(c, x, z, rng, opt = {}) {
           dropMesh.position.set(dripX, dropY, dripZ);
           const stretch = 1 + Math.min(0.8, dropVy * 0.14);
           dropMesh.scale.set(0.84, stretch, 0.84);
+          dropMat.color.setRGB(0.76 * lScale, 0.81 * lScale, 0.76 * lScale);
         }
       }
 
@@ -761,6 +799,7 @@ export function buildLeakSpot(c, x, z, rng, opt = {}) {
         } else {
           rippleMesh.scale.setScalar(1 + (maxRippleScale - 1) * u);
           rippleMat.opacity = RIPPLE_BASE_OPACITY * (1 - u) * (1 - u);
+          rippleMat.color.setRGB(0.82 * lScale, 0.86 * lScale, 0.80 * lScale);
         }
       }
     });
@@ -812,7 +851,7 @@ export function dressOfficeWear(c, opt = {}) {
     });
   };
 
-  const pushWallDamp = (side, at, y, w, h, variant, alpha, off = 0.009) => {
+  const pushWallDamp = (side, at, y, w, h, variant, alpha, off = 0.005) => {
     const p = c.wallAt(side, at, off), U = p.U, hw = w / 2, hh = h / 2;
     wallDampQuads.push({
       corners: [
@@ -864,7 +903,7 @@ export function dressOfficeWear(c, opt = {}) {
     const maxP = area > OFFICE_WEAR_LIMITS.largeRoomArea ? OFFICE_WEAR_LIMITS.largeRoomMaxPeels : OFFICE_WEAR_LIMITS.maxPeels;
     const nPeels = maxP > 1 && rng.chance(0.45) ? 2 : 1;
     const peelTex = c.kit.tex.peel?.(c.look) || fallbackPeel(c.kit, c.look);
-    const peelBatch = c.mapped('office-peel', peelTex, { cutout: true, detail: true });
+    const peelBatch = c.mapped('office-peel', peelTex, { cutout: true, detail: true, noBeamShadow: true });
     const wallHex = c.look?.wall || '#d9c676';
     const inkHex = c.look?.ink || '#b59d52';
 
@@ -879,9 +918,8 @@ export function dressOfficeWear(c, opt = {}) {
       const y = clamp(lowSeam ? rng.range(0.45, 0.72) : rng.range(1.15, 2.05), 0.16 + ph / 2, cy - 0.14 - ph / 2);
       const curlDir = rng.chance(0.5) ? 1 : -1;
 
-      c.hang(peelBatch, spot.side, spot.at, y, pw, ph, null, WHITE, 0.006);
-      // Tiny dark crevice shadow right behind the curling paper edge
-      c.hang(c.detail, spot.side, spot.at + curlDir * pw * 0.14, y, pw * 0.24, ph * 0.88, null, [0.08, 0.07, 0.05], 0.007);
+      const peelUv = curlDir < 0 ? [[1, 0], [0, 0], [0, 1], [1, 1]] : null;
+      c.hang(peelBatch, spot.side, spot.at, y, pw, ph, peelUv, WHITE, 0.006);
       // Thin 3D curled paper flap standing 1–3 cm proud of the wall
       const flapModel = c.kit.model(`office-wear:peel-flap:${wallHex}:${curlDir}`, () => peelFlapVox(wallHex, inkHex, curlDir), { ao: false });
       placeWallFitVox(c, flapModel, spot.side, spot.at, y, WALLFIT.voxel, 0.002, c.vox);
@@ -901,14 +939,14 @@ export function dressOfficeWear(c, opt = {}) {
         const p = c.wallAt(spot.side, spot.at, 0.05);
         const cy = ceilAt(room, p.x, p.z);
         const sw = rng.range(0.09, 0.16), sh = Math.min(cy - 0.35, rng.range(0.55, 1.15));
-        pushWallDamp(spot.side, spot.at, cy - 0.02 - sh / 2, sw, sh, 1, rng.range(0.16, 0.26), 0.009);
+        pushWallDamp(spot.side, spot.at, cy - 0.02 - sh / 2, sw, sh, 1, rng.range(0.16, 0.26), 0.005);
         summary.dampBands++;
       } else {
         const spot = pickWallSpot(c, rng, 0.9, { margin: 0.4, minTop: 0.9, usedWall });
         if (!spot) continue;
         usedWall.push([spot.side, spot.at - 0.55, spot.at + 0.55]);
         const bw = rng.range(0.75, 1.45), bh = rng.range(0.20, 0.28);
-        pushWallDamp(spot.side, spot.at, 0.11 + bh / 2, bw, bh, 0, rng.range(0.18, 0.28), 0.009);
+        pushWallDamp(spot.side, spot.at, 0.11 + bh / 2, bw, bh, 0, rng.range(0.18, 0.28), 0.005);
         summary.dampBands++;
       }
     }
@@ -950,8 +988,8 @@ export function dressOfficeWear(c, opt = {}) {
     }
   }
 
-  // Gather unoccupied flat ceiling tiles (never overlapping fluorescent light panels)
-  const freeTiles = collectFreeCeilingTiles(room).filter((t) => !usedTiles.has(t.key));
+  // Gather unoccupied flat ceiling tiles (never overlapping fluorescent light panels or ceiling holes)
+  const freeTiles = collectFreeCeilingTiles(room, c.rt?.holeTiles).filter((t) => !usedTiles.has(t.key));
   const takeTile = (minDist = 0, fromList = []) => {
     const pool = freeTiles.filter((t) => !usedTiles.has(t.key) && fromList.every((o) => Math.hypot(t.tx - o.tx, t.tz - o.tz) >= minDist));
     if (!pool.length) return null;
@@ -1030,9 +1068,9 @@ export function dressOfficeWear(c, opt = {}) {
         const base = pos.length / 3;
         const [cx, cy, cz] = q.center, [nx, ny, nz] = q.normal;
         const l = typeof c.sample === 'function' ? c.sample(cx, cy, cz, nx, ny, nz) : [0.7, 0.7, 0.7];
-        const lr = clamp(l[0] * 1.15 + 0.08, 0.08, 1);
-        const lg = clamp(l[1] * 1.15 + 0.08, 0.08, 1);
-        const lb = clamp(l[2] * 1.15 + 0.08, 0.08, 1);
+        const lr = clamp(l[0] * 1.15 + 0.01, 0.01, 1);
+        const lg = clamp(l[1] * 1.15 + 0.01, 0.01, 1);
+        const lb = clamp(l[2] * 1.15 + 0.01, 0.01, 1);
         const qUv = atlasObj.uv(q.variant);
         for (let k = 0; k < 4; k++) {
           const p = q.corners[k];
@@ -1047,15 +1085,21 @@ export function dressOfficeWear(c, opt = {}) {
       geo.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
       geo.setAttribute('color', new THREE.Float32BufferAttribute(col, 4));
       geo.setIndex(idx);
-      const mat = c.kit.own(new THREE.MeshBasicMaterial({
-        map: atlasObj.texture,
-        vertexColors: true,
-        transparent: true,
-        depthWrite: false,
-        polygonOffset: true,
-        polygonOffsetFactor: -1,
-        polygonOffsetUnits: -1,
-      }));
+      const cache = wearCache(c.kit);
+      const matKey = tag === 'stains' ? 'stainMat' : 'dampMat';
+      let mat = cache[matKey];
+      if (!mat || mat.map !== atlasObj.texture) {
+        mat = c.kit.own(new THREE.MeshBasicMaterial({
+          map: atlasObj.texture,
+          vertexColors: true,
+          transparent: true,
+          depthWrite: false,
+          polygonOffset: true,
+          polygonOffsetFactor: -1,
+          polygonOffsetUnits: -1,
+        }));
+        cache[matKey] = mat;
+      }
       const mesh = new THREE.Mesh(geo, mat);
       mesh.name = name;
       mesh.renderOrder = 1;

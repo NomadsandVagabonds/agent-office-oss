@@ -19,7 +19,7 @@
 //     and its beam shadow matrix into mirror camera space; shared across all surfaces on the same horizontal plane.
 import { gpu } from '../engine/gpu.js';
 import { LIQUID, SWELL, UNDERSIDE, MIRROR, underwater, seesUnderside, holdStep, wakeStart, wakeStep, wakeFill,
-  waterColours, wadeStep, swellRings, mirrorPlane, reflectMatrix, pickMirror, mirrorLeaves, screenCover,
+  waterColours, wadeStep, swellRings, mirrorPlane, reflectMatrix, mirrorSize, pickMirror, mirrorLeaves, screenCover,
   mirrorGate, mirrorWeight } from './liquid.rule.js';
 import { HELD_ORDER } from './beam-shadows.rule.js';
 import { collectLiquids } from './liquid.mark.js';
@@ -121,11 +121,11 @@ function waterNode(old, rec, toRoom, shared, own, { swell = false, underside = f
   };
   const caustic = (p, slope, thick) => {
     const q0 = p.add(slope.mul(LIQUID.causticBend).mul(thick)).sub(vec2(...LIQUID.causticDrift).mul(own.phase));
-    const q = floor(q0.div(LIQUID.causticCell)).add(0.5).mul(LIQUID.causticCell);
-    const e = mix(float(LIQUID.causticSharp[0]), float(LIQUID.causticSharp[1]), clamp(thick.mul(0.5), 0, 1));
+    const q = floor(q0.div(LIQUID.causticCell)).add(0.5).mul(LIQUID.causticCell).toVar();
+    const e = mix(float(LIQUID.causticSharp[0]), float(LIQUID.causticSharp[1]), clamp(thick.mul(0.5), 0, 1)).toVar();
     const qa = vec2(q.x.mul(0.8).add(q.y.mul(0.6)), q.x.mul(-0.6).add(q.y.mul(0.8))).mul(LIQUID.causticScale[0]);
     const qb = vec2(q.x.mul(0.28).sub(q.y.mul(0.96)), q.x.mul(0.96).add(q.y.mul(0.28))).mul(LIQUID.causticScale[1]).add(vec2(13.7, 5.1));
-    const a = causticLayer(qa, uTime.mul(LIQUID.causticSpeed[0]), e), b = causticLayer(qb, uTime.mul(LIQUID.causticSpeed[1]).add(2.3), e);
+    const a = causticLayer(qa, uTime.mul(LIQUID.causticSpeed[0]), e).toVar(), b = causticLayer(qb, uTime.mul(LIQUID.causticSpeed[1]).add(2.3), e).toVar();
     return clamp(a.add(b).mul(0.35).add(a.mul(b)), 0, 1);
   };
   const linear = (d) => near.mul(far).div(far.sub(d.mul(far.sub(near))));
@@ -136,23 +136,23 @@ function waterNode(old, rec, toRoom, shared, own, { swell = false, underside = f
     if (mirror && refl && !underside && builder && !builder.object?.isQuadMesh) refl.reflector.build(builder);
 
     const cell = LIQUID.cell;
-    const c = floor(vRoom.xz.div(cell)).add(0.5).mul(cell);
-    const h0 = height(c), hx = height(c.add(vec2(cell, 0))), hz = height(c.add(vec2(0, cell)));
+    const c = floor(vRoom.xz.div(cell)).add(0.5).mul(cell).toVar();
+    const h0 = height(c).toVar(), hx = height(c.add(vec2(cell, 0))), hz = height(c.add(vec2(0, cell)));
     const slope = floor(vec2(hx.sub(h0), hz.sub(h0)).div(cell).div(LIQUID.slopeStep).add(0.5)).mul(LIQUID.slopeStep).toVar();
-    const fw = fwidth(vRoom.xz);
+    const fw = fwidth(vRoom.xz).toVar();
     slope.mulAssign(clamp(float(cell).div(max(max(fw.x, fw.y), 1e-5)).sub(LIQUID.sharp[0]).div(LIQUID.sharp[1] - LIQUID.sharp[0]), 0, 1));
     // the swell: its slope on the ripple's own cells, stepped coarser (the face in broad bands), never flattened far off
     let sw0 = null, swd = null, sws = null;
     if (swell) {
-      sw0 = swellAt(c); swd = swellD(c);
-      sws = vec2(swellAt(c.add(vec2(cell, 0))).sub(sw0), swellAt(c.add(vec2(0, cell))).sub(sw0)).div(cell);
+      sw0 = swellAt(c).toVar(); swd = swellD(c).toVar();
+      sws = vec2(swellAt(c.add(vec2(cell, 0))).sub(sw0), swellAt(c.add(vec2(0, cell))).sub(sw0)).div(cell).toVar();
       slope.addAssign(floor(sws.div(SWELL.slopeStep).add(0.5)).mul(SWELL.slopeStep));
     }
     // the wake: its own slope on cells that widen far off, gentler right under the eye
     const wk = vec4(0).toVar(), wx = float(0).toVar(), wz = float(0).toVar();
-    const rc = float(cell).mul(exp2(clamp(ceil(log2(sqrt(max(fw.x.mul(fw.y), 1e-10)).mul(LIQUID.wakePixels).div(cell))), 0, 2)));
-    const rp = floor(vRoom.xz.div(rc)).add(0.5).mul(rc);
-    const g = mix(float(LIQUID.wakeNear[2]), float(1), ss(LIQUID.wakeNear[0], LIQUID.wakeNear[1], distance(vec3(rp.x, vRoom.y, rp.y), own.eyeRoom)));
+    const rc = float(cell).mul(exp2(clamp(ceil(log2(sqrt(max(fw.x.mul(fw.y), 1e-10)).mul(LIQUID.wakePixels).div(cell))), 0, 2))).toVar();
+    const rp = floor(vRoom.xz.div(rc)).add(0.5).mul(rc).toVar();
+    const g = mix(float(LIQUID.wakeNear[2]), float(1), ss(LIQUID.wakeNear[0], LIQUID.wakeNear[1], distance(vec3(rp.x, vRoom.y, rp.y), own.eyeRoom))).toVar();
     If(own.ringN.greaterThan(int(0)), () => {
       Loop({ start: int(0), end: own.ringN, type: 'int', condition: '<' }, ({ i }) => {
         const w = own.rings.element(i);
@@ -168,24 +168,24 @@ function waterNode(old, rec, toRoom, shared, own, { swell = false, underside = f
       }
     });
     const R = own.roomToView;
-    const up = normalize(R.mul(vec3(0, 1, 0)));
-    const n = normalize(R.mul(normalize(vec3(slope.x.negate(), 1, slope.y.negate()))));
-    const bend = n.sub(up).xy;
+    const up = normalize(R.mul(vec3(0, 1, 0))).toVar();
+    const n = normalize(R.mul(normalize(vec3(slope.x.negate(), 1, slope.y.negate())))).toVar();
+    const bend = n.sub(up).xy.toVar();
     const uv = screenUV;
     const half = vec2(0.5).div(screenSize);
-    const zw = positionView.z.negate();
+    const zw = positionView.z.negate().toVar();
     const light = vLit;
 
     // ---- underside (the eye in the water, looking up: LIQUID_UNDER_FRAG / UNDERSIDE) ----
     if (underside) {
       const rayUp = normalize(positionView);
       const cosUp = dot(rayUp, n);
-      const d = length(positionView);
-      const Tu = max(exp(absorb.negate().mul(d)), keep.rgb.mul(exp(keep.w.negate().mul(d))));
-      const ownCol = deep.mul(light);
-      const nudgedU = clamp(uv.add(vec2(bend.x, bend.y.negate()).mul(UNDERSIDE.bend)), half, vec2(1).sub(half));
-      const rdLinU = linear(viewportDepthTexture(nudgedU).x);
-      const ruvU = select(rdLinU.lessThan(zw), uv, nudgedU);
+      const d = length(positionView).toVar();
+      const Tu = max(exp(absorb.negate().mul(d)), keep.rgb.mul(exp(keep.w.negate().mul(d)))).toVar();
+      const ownCol = deep.mul(light).toVar();
+      const nudgedU = clamp(uv.add(vec2(bend.x, bend.y.negate()).mul(UNDERSIDE.bend)), half, vec2(1).sub(half)).toVar();
+      const rdLinU = linear(viewportDepthTexture(nudgedU).x).toVar();
+      const ruvU = select(rdLinU.lessThan(zw), uv, nudgedU).toVar();
       const above = viewportSharedTexture(ruvU).rgb.mul(UNDERSIDE.through);
       const inside = above.mul(Tu).add(ownCol.mul(vec3(1).sub(Tu)))
         .add(scatter.mul(light).mul(exp(d.mul(-LIQUID.scatterDepth)).oneMinus()).mul(exp(d.mul(-LIQUID.scatterFade))));
@@ -195,25 +195,25 @@ function waterNode(old, rec, toRoom, shared, own, { swell = false, underside = f
     }
 
     // ---- top surface (the eye above the water: LIQUID_FRAG) ----
-    const v = normalize(positionView.negate());
-    const ray = length(positionView).div(max(zw, 1e-4));
-    const behind = max(linear(viewportDepthTexture(uv).x).sub(zw), 0).mul(ray);
+    const v = normalize(positionView.negate()).toVar();
+    const ray = length(positionView).div(max(zw, 1e-4)).toVar();
+    const behind = max(linear(viewportDepthTexture(uv).x).sub(zw), 0).mul(ray).toVar();
     // (screenUV counts down the picture, view space up: the tilt's y the other way)
-    const nudged = clamp(uv.add(vec2(bend.x, bend.y.negate()).mul(LIQUID.refract).mul(min(behind, LIQUID.refractMost))), half, vec2(1).sub(half));
-    const rdLin = linear(viewportDepthTexture(nudged).x);
+    const nudged = clamp(uv.add(vec2(bend.x, bend.y.negate()).mul(LIQUID.refract).mul(min(behind, LIQUID.refractMost))), half, vec2(1).sub(half)).toVar();
+    const rdLin = linear(viewportDepthTexture(nudged).x).toVar();
     // (the ripple never fetches what is above the water: where the nudged pixel is in front of the surface, it is not nudged)
-    const ok = rdLin.greaterThanEqual(zw);
-    const ruv = select(ok, nudged, uv), thick = select(ok, max(rdLin.sub(zw), 0).mul(ray), behind);
+    const ok = rdLin.greaterThanEqual(zw).toVar();
+    const ruv = select(ok, nudged, uv).toVar(), thick = select(ok, max(rdLin.sub(zw), 0).mul(ray), behind).toVar();
     const under = viewportSharedTexture(ruv).rgb.toVar();
     const litR = luma(under).div(max(luma(light), 0.05));
     const dir = normalize(vRoom.sub(own.eyeRoom));
-    const k = caustic(vRoom.xz.add(dir.xz.mul(thick)), slope, thick).mul(exp(thick.mul(keep.w).mul(-LIQUID.causticFade / LIQUID.keep)));
-    const bare = vec3(under);
+    const k = caustic(vRoom.xz.add(dir.xz.mul(thick)), slope, thick).mul(exp(thick.mul(keep.w).mul(-LIQUID.causticFade / LIQUID.keep))).toVar();
+    const bare = vec3(under).toVar();
     under.mulAssign(k.mul(shared.uCaustic).add(1));
     under.mulAssign(min(1, max(luma(bare), luma(light)).div(max(luma(under), 1e-5))));
     under.mulAssign(min(wk.w, 1.5).mul(k.add(0.35)).mul(LIQUID.wakeStir).add(1));     // (inside a fresh ring: the light stirred)
-    const T0 = max(exp(absorb.negate().mul(thick)), keep.rgb.mul(exp(keep.w.negate().mul(thick))));
-    const Tm = mix(T0, vec3(1).sub(vec3(1).sub(T0).mul(1 - LIQUID.glowKeep)), ss(0.9, 1.6, litR));
+    const T0 = max(exp(absorb.negate().mul(thick)), keep.rgb.mul(exp(keep.w.negate().mul(thick)))).toVar();
+    const Tm = mix(T0, vec3(1).sub(vec3(1).sub(T0).mul(1 - LIQUID.glowKeep)), ss(0.9, 1.6, litR)).toVar();
     const colour = under.mul(Tm).add(deep.mul(light).mul(vec3(1).sub(Tm)))
       .add(scatter.mul(light).mul(exp(thick.mul(-LIQUID.scatterDepth)).oneMinus()).mul(exp(thick.mul(-LIQUID.scatterFade)))).toVar();
     const F = pow(max(dot(n, v), 0).oneMinus(), 5).mul(1 - LIQUID.f0).add(LIQUID.f0);
@@ -223,15 +223,15 @@ function waterNode(old, rec, toRoom, shared, own, { swell = false, underside = f
       if (swell) mOn = mOn.mul(ss(SWELL.mirrorFrom, SWELL.mirrorGone, sw0).oneMinus());
       // Sample shared reflector texture directly (avoids r180 ReflectorNode.clone() bug while keeping isRenderTargetTexture).
       const q = clamp(screenUV.flipX().add(vec2(bend.x.negate(), bend.y.negate()).mul(MIRROR.wobble)), vec2(0.002), vec2(0.998));
-      const r0 = texture(refl.value, q).onRenderUpdate(() => refl.value).rgb;
+      const r0 = texture(refl.value, q).onRenderUpdate(() => refl.value).rgb.toVar();
       const rl = luma(r0), cap = max(luma(light).mul(MIRROR.cap), MIRROR.capLeast);
       const r = r0.mul(min(1, cap.div(max(rl, 1e-5)))).mul(MIRROR.dim).mul(mix(vec3(1), keep.rgb, MIRROR.tint));
       colour.assign(mix(colour, mix(flatTint, r, mOn), F));
     } else {
       colour.assign(mix(colour, flatTint, F));
     }
-    const edge = ss(LIQUID.edge * 0.5, LIQUID.edge, behind).oneMinus();
-    const seen = clamp(dot(light, vec3(0.333)).mul(0.7).add(dot(under, vec3(0.4)).mul(0.5)), 0, 1.5);
+    const edge = ss(LIQUID.edge * 0.5, LIQUID.edge, behind).oneMinus().toVar();
+    const seen = clamp(dot(light, vec3(0.333)).mul(0.7).add(dot(under, vec3(0.4)).mul(0.5)), 0, 1.5).toVar();
     colour.assign(mix(colour, vec3(...LIQUID.edgeColor).mul(seen), edge.mul(LIQUID.edgeMix)));
     colour.mulAssign(clamp(wk.y.mul(LIQUID.wakeCrest), 0, 0.9).sub(clamp(wk.z.mul(LIQUID.wakeTrough), 0, 0.35)).mul(edge.oneMinus()).add(1));
     if (swell) {
@@ -289,7 +289,21 @@ export function createLiquidViewNode() {
   function ensureReflector() {
     if (refl) return refl;
     refl = T.reflector({ resolutionScale: MIRROR.scale, bounces: false });
-    const base = refl.reflector, origUpdate = base.updateBefore.bind(base);
+    const base = refl.reflector, origUpdate = base.updateBefore.bind(base), dbSize = new N.Vector2();
+    // Size the reflector from the active sceneTarget (matching liquid.js mirrorSize), never full retina window size.
+    base._updateResolution = (rt, renderer) => {
+      const active = renderer.getRenderTarget?.();
+      let w, h;
+      if (active && active.width > 0 && active.height > 0) {
+        [w, h] = mirrorSize(active.width, active.height);
+      } else {
+        renderer.getDrawingBufferSize(dbSize);
+        [w, h] = mirrorSize(dbSize.width, dbSize.height);
+        w = Math.min(w, 720);
+        h = Math.min(h, 540);
+      }
+      if (rt.width !== w || rt.height !== h) rt.setSize(w, h);
+    };
     base.updateBefore = (frame) => {
       if (!mirrorRec || level < 2 || reflecting) return false;
       const { scene, camera } = frame;
@@ -384,7 +398,12 @@ export function createLiquidViewNode() {
       old.parent.add(water);
       rec.pairs.push({ old, water, material, own, rec, index: i, under: null, swellMaterial: null, swellUnder: null, mirrorMaterial: null, swellMirrorMaterial: null });
     });
-    if (rec.pairs.length) rec.state = 'up'; else { rec.state = 'refused'; rec.reason = 'not a kit sheet'; rec.pairs = null; rec.wake = null; rec.disturb = null; }
+    if (rec.pairs.length) {
+      rec.state = 'up';
+      const standIns = [];
+      rec.rt.group.traverse((o) => { if (o.userData?.liquidStandIn) standIns.push(o); });
+      rec.standIns = standIns;
+    } else { rec.state = 'refused'; rec.reason = 'not a kit sheet'; rec.pairs = null; rec.wake = null; rec.disturb = null; rec.standIns = null; }
   }
 
   /** Lazily build and return the right variant material for pair `p` this frame. */
@@ -413,7 +432,7 @@ export function createLiquidViewNode() {
     if (on) for (const p of rec.pairs) {
       if (p.dense === undefined) {
         if (!ROOM_UP(rec.toRoom[p.index] || [])) { p.dense = null; rec.swellRefused = 'turned in its room'; }
-        else { const g = swellGeometry(p.old.geometry); p.dense = g.geometry; if (!g.geometry) rec.swellRefused = g.why; }
+        else { const g = swellGeometry(p.old.geometry); p.dense = g.geometry; if (!g.geometry) rec.swellRefused = g.why; else rec.kit?.own?.(p.dense); }
       }
       if (!p.dense) on = false;
     }
@@ -487,7 +506,10 @@ export function createLiquidViewNode() {
         if (recInView && mirrors && !rec.under && at.y > rec.plane.y + MIRROR.above && (rec.edge ||= sheetRim(rec)).facesUp) {
           cands.push({ rec, dist: box.distanceToPoint(eye) });
         }
-        rooms.add(rec.rt.group);
+        if (!rooms.has(rec.rt.group)) {
+          rooms.add(rec.rt.group);
+          for (const o of rec.standIns || []) if (o.visible) { o.visible = false; stood.push(o); }
+        }
       }
       hold = holdStep(hold, now, seen, view.force);
       stats.split = false;
@@ -524,8 +546,6 @@ export function createLiquidViewNode() {
         if (p.water.material !== mat) p.water.material = mat;
       }
 
-      // (what a room draws itself in place of what the water now does: hidden while the water is drawn)
-      for (const g of rooms) g.traverse((o) => { if (o.userData?.liquidStandIn && o.visible) { o.visible = false; stood.push(o); } });
       if (seen) stats.draws++;
       return false;
     },
@@ -561,7 +581,7 @@ export function createLiquidViewNode() {
           p.material.dispose(); p.under?.dispose(); p.swellMaterial?.dispose(); p.swellUnder?.dispose();
           p.mirrorMaterial?.dispose(); p.swellMirrorMaterial?.dispose(); p.dense?.dispose();
         }
-        rec.pairs = null; rec.state = 'marked'; rec.live = false; rec.wake = null; rec.disturb = null;
+        rec.pairs = null; rec.state = 'marked'; rec.live = false; rec.wake = null; rec.disturb = null; rec.standIns = null;
         rec.swellU = null; rec.swellOn = false; rec.swellLast = null; rec.swellRefused = undefined;
       }
       body = null;

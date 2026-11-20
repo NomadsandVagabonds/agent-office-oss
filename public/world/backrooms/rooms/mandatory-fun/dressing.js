@@ -179,6 +179,6 @@ export function dressParty(c) {
   for(let i=0;i<240;i++) {
     const side=i%4,along=R.range(-1,1),edge=R.range(.15,1.15);
     const x=side<2?(side?1:-1)*(W/2-edge):along*(W/2-.2),z=side>=2?(side===3?1:-1)*(D/2-edge):along*(D/2-.2);
-    c.lay(c.flat,x,z,R.range(.025,.065),R.range(.04,.1),R.range(-3,3),null,palette[i%4],.012);
+    c.lay(c.flat,x,z,R.range(.025,.065),R.range(.04,.1),R.range(-3,3),null,palette[i%4],.011+(i%7)*.0005);
   }
 }

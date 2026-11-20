@@ -38,8 +38,10 @@ const flush = () => new Promise(resolve => setImmediate(resolve));
 async function visit(t, options = {}) {
   const key = `__batteryEndingTest${++serial}`, noop = () => {};
   let onFrame, ready, menuActions, worldStep = noop;
-  const warnings = [], icons = [], cards = [], disposedFloors = [], uniforms = Object.fromEntries(
-    ['uSnow', 'uBlack', 'uWhite', 'uRed', 'uTrack', 'uGain', 'uRoll', 'uStaticDark'].map(name => [name, { value: 0 }]));
+  const warnings = [], icons = [], cards = [], disposedFloors = [], uniforms = {
+    ...Object.fromEntries(['uSnow', 'uBlack', 'uWhite', 'uRed', 'uTrack', 'uGain', 'uExposure', 'uDefocus', 'uRoll', 'uStaticDark'].map(name => [name, { value: 0 }])),
+    uBalance: { value: new THREE.Vector3(1, 1, 1) },
+  };
   const hud = {
     el: {}, warnings, icons, ending: false, removed: false,
     setClean: noop, layout: noop, hint: noop, flag: noop, recording: noop, setStamp: noop, setPaused: noop, update: noop, glitch: noop,
@@ -73,6 +75,9 @@ async function visit(t, options = {}) {
       };
     },
     createVhs: () => vhs, createHud: () => hud, createSound: () => sound, createInput: () => input,
+    createCamcorderAdapt: () => ({ exposure: 1, balance: [1, 1, 1], defocus: 0 }),
+    resetCamcorderAdapt: (s) => s,
+    stepCamcorderAdapt: (s) => s,
     createStalkers(env) { env.pursuer = { update: noop, dispose: noop, carry: () => null }; },
     createHand: noop, createHandView(env) { env.handView = { update: noop, hide: noop, dispose: noop }; },
     createDenizens(env) { env.denizens = { update: noop, sync: noop, dispose: noop }; },

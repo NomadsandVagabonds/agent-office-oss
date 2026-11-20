@@ -194,7 +194,7 @@ export function build(c) {
   // the ceiling over the camp: night up there, boughs hung from it, turf and a log laid up there, and the cardboard
   // birds, all of it hard to make out
   for (let x = -W / 2 + 1.6; x < W / 2 - 0.4; x += 2.4) for (let z = -D / 2 + 1.6; z < D / 2 - 0.4; z += 2.4) {
-    c.blot(x + R.range(-0.3, 0.3), z + R.range(-0.3, 0.3), 3.2, 3.2, { rgb: [0.012, 0.014, 0.02], a: 0.6, y: H - 0.006, down: true });
+    c.blot(x + R.range(-0.3, 0.3), z + R.range(-0.3, 0.3), 3.2, 3.2, { rgb: [0.012, 0.014, 0.02], a: 0.6, y: H - 0.0045, down: true });
   }
   for (let i = 0; i < 8; i++) {
     const a = phase + (i / 8) * Math.PI * 2 + R.range(-0.2, 0.2), r = R.range(0.55, 0.95);

@@ -146,12 +146,18 @@ export function createGlowMaterials() {
    */
   function twin(m, exact, strength = 1) {
     const scaled = strength !== 1 && m.fragmentShader.includes(EMITTED) && m.fragmentShader.includes('void main() {');
+    const x = entry(m), k = (exact ? 'twinX' : 'twin') + (scaled ? 'S' : '');
+    if (x[k] && x[k + 'Ver'] === m.version && x[k + 'Side'] === m.side && x[k + 'Trans'] === m.transparent && x[k + 'Frag'] === m.fragmentShader && x[k + 'Vert'] === m.vertexShader) {
+      if (scaled) x[k].uniforms.uGlowStrength.value = strength;
+      return x[k];
+    }
     const defines = { ...m.defines };
     delete defines.BEAM_SHADOWS;                     // (the beam is light, not emission: its shadow has nothing to do here)
     defines.EMISSIVE_BLOOM = 1;
     if (exact) defines.EMISSIVE_BLOOM_DEPTH = 1;
-    const key = `${JSON.stringify(defines)}|${m.side}|${m.transparent}`, x = entry(m), k = (exact ? 'twinX' : 'twin') + (scaled ? 'S' : '');
+    const key = `${JSON.stringify(defines)}|${m.side}|${m.transparent}`;
     if (x[k] && x[k + 'Key'] === key && x[k + 'Frag'] === m.fragmentShader && x[k + 'Vert'] === m.vertexShader) {
+      x[k + 'Ver'] = m.version; x[k + 'Side'] = m.side; x[k + 'Trans'] = m.transparent;
       if (scaled) x[k].uniforms.uGlowStrength.value = strength;
       return x[k];
     }
@@ -161,7 +167,7 @@ export function createGlowMaterials() {
     const material = new THREE.ShaderMaterial({ defines, uniforms: scaled ? { ...uniforms, uGlowStrength: { value: strength } } : uniforms, vertexShader: m.vertexShader,
       fragmentShader: scaled ? scaleEmitted(m.fragmentShader) : m.fragmentShader, side: m.side, transparent: m.transparent, depthWrite: true, blending: THREE.NoBlending });
     material.name = (exact ? 'glow:kit:exact' : 'glow:kit') + (scaled ? ':scaled' : '');
-    Object.assign(x, { [k]: material, [k + 'Key']: key, [k + 'Frag']: m.fragmentShader, [k + 'Vert']: m.vertexShader });
+    Object.assign(x, { [k]: material, [k + 'Key']: key, [k + 'Ver']: m.version, [k + 'Side']: m.side, [k + 'Trans']: m.transparent, [k + 'Frag']: m.fragmentShader, [k + 'Vert']: m.vertexShader });
     return material;
   }
   /** Black, on the same side, cut out by the same picture if it is a cut-out, and in the same queue (held things are drawn last). */

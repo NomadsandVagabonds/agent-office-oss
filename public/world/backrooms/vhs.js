@@ -223,6 +223,8 @@ export function createVhs(renderer, camera, opt = {}) {
   if (renderer.isWebGPURenderer) return createVhsNode(renderer, camera, opt);
   const target = new THREE.WebGLRenderTarget(4, 4, { type: THREE.HalfFloatType, samples: 4 });
   const composer = new EffectComposer(renderer, target);
+  composer.readBuffer = composer.renderTarget1;
+  composer.writeBuffer = composer.renderTarget2;
   composer.setPixelRatio(1);
   const renderPass = new RenderPass(new THREE.Scene(), camera);
   const bloom = new UnrealBloomPass(new THREE.Vector2(256, 256), 0.32, 0.55, 0.92);
@@ -256,6 +258,24 @@ export function createVhs(renderer, camera, opt = {}) {
   renderPass.render = (r, write, read, dt, mask) => drawScene(r, read, () => renderPassRender(r, write, read, dt, mask));
   // --- end water ---
 
+  /** Keep MSAA + depthTexture strictly on the single active scene target (renderTarget2 and inactive scene targets stay plain). */
+  function syncTargets(depth, msaa) {
+    const sceneRT = superPass.enabled ? superPass.target : composer.renderTarget1;
+    for (const rt of [composer.renderTarget1, composer.renderTarget2, superPass.target]) {
+      const active = rt === sceneRT;
+      const wantSamples = active ? msaa : 0;
+      const wantDepth = active && depth;
+      let dirty = false;
+      if (rt.samples !== wantSamples) { rt.samples = wantSamples; dirty = true; }
+      if (wantDepth !== !!rt.depthTexture) {
+        rt.depthTexture?.dispose();
+        rt.depthTexture = wantDepth ? new THREE.DepthTexture(rt.width, rt.height) : null;
+        dirty = true;
+      }
+      if (dirty) rt.dispose();
+    }
+  }
+
   /**
    * Fit the picture to the window. w, h in CSS pixels. `top`: where its top edge goes, px from the window's (a phone held
    * upright has the picture at the top and its thumbs under it); with none, or no room to spare, it sits in the middle.
@@ -269,6 +289,7 @@ export function createVhs(renderer, camera, opt = {}) {
     composer.setSize(iw, ih);
     superPass.enabled = sw > iw; renderPass.enabled = !superPass.enabled;
     if (superPass.enabled) superPass.resize(sw, sh, iw, ih);
+    syncTargets(prof.haze > 0, prof.msaa);
     if (glow) glow.resize(sw, sh);
     for (const rt of [composer.renderTarget1, composer.renderTarget2, superPass.target]) if (rt.depthTexture) Object.assign(rt.depthTexture.image, { width: rt.width, height: rt.height });
     camera.aspect = iw / ih; camera.updateProjectionMatrix();
@@ -310,19 +331,10 @@ export function createVhs(renderer, camera, opt = {}) {
     bloom.strength = own ? 0.3 : 0.32; bloom.radius = own ? 0 : 0.55;
     bloom.compositeMaterial.uniforms.bloomFactors.value = own ? [1, 0.5, 0, 0, 0] : [1, 0.8, 0.6, 0.4, 0.2];
     u.uGrade.value = p.grade; u.uHaze.value = p.haze * hazeK;
-    // haze needs the depth of the picture: a depth texture on both of the composer's targets (resolved from the
-    // multisampled one by three.js), only while some haze is asked for. Classic leaves the targets as they were
+    // haze needs the depth of the picture: a depth texture on the active scene target only (resolved from the
+    // multisampled one by three.js), only while some haze is asked for. Classic leaves the active target as it was
     const depth = p.haze > 0;
-    for (const rt of [composer.renderTarget1, composer.renderTarget2, superPass.target]) {
-      let dirty = false;
-      if (rt.samples !== p.msaa) { rt.samples = p.msaa; dirty = true; }
-      if (depth !== !!rt.depthTexture) {
-        rt.depthTexture?.dispose();
-        rt.depthTexture = depth ? new THREE.DepthTexture(rt.width, rt.height) : null;
-        dirty = true;
-      }
-      if (dirty) rt.dispose();
-    }
+    syncTargets(depth, p.msaa);
     last = '';
   }
   /** The kind of floor's grade, haze colour, haze strength (times the tier's) and where the haze begins (graphics.js gradeOf). */
@@ -334,6 +346,7 @@ export function createVhs(renderer, camera, opt = {}) {
     u.uHazeFrom.value = Number.isFinite(g.hazeFrom) ? g.hazeFrom : 8;
   }
   if (opt.profile) setProfile(opt.profile);
+  else syncTargets(false, prof.msaa);
 
   return {
     picture, layout, setLevel, setProfile, setGrade, uniforms: u, bloom,

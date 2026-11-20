@@ -31,7 +31,12 @@ function keyByPass() {
   const N = gpu.nodes, { mrt, vec4 } = N.TSL;
   for (const proto of new Set([N.Material.prototype, N.NodeMaterial.prototype])) {
     const base = proto.customProgramCacheKey;
-    proto.customProgramCacheKey = function () { const k = base.call(this); return glowPass.on ? `${k}|glow-mrt` : k; };
+    proto.customProgramCacheKey = function () {
+      const k = base.call(this);
+      if (!glowPass.on) return k;
+      const role = this.transparent && this.depthWrite === false ? 'skip' : !this.userData?.glow ? 'none' : (this.userData.glow === 'picture' && !this.transparent ? 'pic' : 'lamp');
+      return `${k}|glow-mrt:${role}`;
+    };
   }
   // Keep glowPass.on aligned with renderer.setMRT() so nested single-target passes (ReflectorNode) that
   // temporarily clear MRT during the glow pass never pick up cached 2-output |glow-mrt shaders.
@@ -72,7 +77,7 @@ export function sceneGlowMRT() {
       const mat = builder.material;
       if (!mat || (mat.transparent && mat.depthWrite === false)) return vec4(0);
       if (!mat.userData?.glow) return vec4(0, 0, 0, 1);
-      const strength = uniform(1).onRenderUpdate(() => glowStrength(mat.userData.bloom));
+      const strength = uniform(1).onObjectUpdate(({ material }) => glowStrength(material?.userData?.bloom));
       const picture = mat.userData.glow === 'picture' && !mat.transparent;
       return vec4(output.rgb.mul(strength), picture ? pictureAlpha : output.a);
     })(),

@@ -315,7 +315,7 @@ function ceilingPlants(c) {
     c.model('vine' + (i % 6), vine(i % 6 + 2), x, z, { flip: true, y: H, rot: R.range(0, 6), solid: false, shadow: false });
   }
   // what has fallen: leaves, and soil that came down with them
-  for (let i = 0; i < p.leaves; i++) { const s = spots.length ? R.pick(spots) : { x: 0, z: 0 }, x = clamp(s.x + R.range(-0.9, 0.9), -W / 2 + 0.1, W / 2 - 0.1), z = clamp(s.z + R.range(-0.9, 0.9), -D / 2 + 0.1, D / 2 - 0.1); c.lay(c.flat, x, z, 0.09, 0.05, R.range(0, 6), null, lin(R.pick(green)), 0.007); }
+  for (let i = 0; i < p.leaves; i++) { const s = spots.length ? R.pick(spots) : { x: 0, z: 0 }, x = clamp(s.x + R.range(-0.9, 0.9), -W / 2 + 0.1, W / 2 - 0.1), z = clamp(s.z + R.range(-0.9, 0.9), -D / 2 + 0.1, D / 2 - 0.1); c.lay(c.flat, x, z, 0.09, 0.05, R.range(0, 6), null, lin(R.pick(green)), 0.0068 + (i % 6) * 0.0004); }
   for (const s of spots.slice(0, 4)) { c.blot(s.x + 0.1, s.z, 0.5, 0.4, { rgb: [0.1, 0.06, 0.03], a: 0.7 }); c.flat.ball(s.x + 0.1, 0.01, s.z, 0.1, [0.16, 0.1, 0.05], 0.35, 6); }
   if (p.can) {
     const s = c.spot(0.35);
@@ -348,10 +348,9 @@ function phone(c) {
   // the cord, across the carpet to the nearest wall
   const w = [[-W / 2, pz, 'left'], [W / 2, pz, 'right'], [px, -D / 2, 'back']].sort((a, b) => Math.hypot(a[0] - px, a[1] - pz) - Math.hypot(b[0] - px, b[1] - pz))[0];
   const cord = [0.13, 0.13, 0.14], mid = [px + (w[0] - px) * 0.5 + R.range(-0.4, 0.4), pz + (w[1] - pz) * 0.5 + R.range(-0.4, 0.4)];
-  for (const [a, b] of [[[px, pz], mid], [mid, [w[0], w[1]]]]) {
-    const len = Math.hypot(b[0] - a[0], b[1] - a[1]), nx = (-(b[1] - a[1]) / len) * 0.008, nz = ((b[0] - a[0]) / len) * 0.008;
-    c.flat.quad([a[0] - nx, 0.012, a[1] - nz], [a[0] + nx, 0.012, a[1] + nz], [b[0] + nx, 0.012, b[1] + nz], [b[0] - nx, 0.012, b[1] - nz], cord);
-    c.flat.quad([a[0] + nx, 0.012, a[1] + nz], [a[0] - nx, 0.012, a[1] - nz], [b[0] - nx, 0.012, b[1] - nz], [b[0] + nx, 0.012, b[1] + nz], cord);
+  for (const [segIdx, [a, b]] of [[[px, pz], mid], [mid, [w[0], w[1]]]].entries()) {
+    const len = Math.hypot(b[0] - a[0], b[1] - a[1]), nx = (-(b[1] - a[1]) / len) * 0.008, nz = ((b[0] - a[0]) / len) * 0.008, y = 0.012 + segIdx * 0.0005;
+    c.flat.quad([a[0] - nx, y, a[1] - nz], [a[0] + nx, y, a[1] + nz], [b[0] + nx, y, b[1] + nz], [b[0] - nx, y, b[1] - nz], cord);
   }
   c.socket(w[2], w[2] === 'back' ? w[0] : w[1], 0.12);
   let armed = true, ring = 0.6, shake = 0, n = 0;

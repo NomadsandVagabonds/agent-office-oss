@@ -115,7 +115,7 @@ export function build(c) {
   // Missing broken ceiling tiles & damp brown leak stains so the ceiling reads unmistakably Backrooms
   for (const [hx, hz] of [[-4.2, -2.5], [3.8, 1.2], [0.0, stageZ - 1.8], [-2.8, zTop + 0.8]]) {
     c.hole(hx, hz, 2);
-    c.blot(hx, hz, 2.8, 2.4, { rgb: [0.12, 0.08, 0.03], a: 0.55, y: H - 0.006, down: true });
+    c.blot(hx, hz, 2.8, 2.4, { rgb: [0.12, 0.08, 0.03], a: 0.55, y: H - 0.0045, down: true });
   }
 
   // 1. Upper Concourse (`z >= zTop`) & Side Walkways (`|x| >= sideX, z >= -1.2`) at y = 0
