@@ -138,10 +138,14 @@ async function run() {
   // (asked for while the level is being fetched, so that nobody waits for it)
   const asked = fetch('./api/where', { headers: { accept: 'application/json' }, cache: 'no-store' }).then((r) => (r.ok ? r.json() : null)).then((d) => (d && typeof d.city === 'string' ? d.city : '')).catch(() => '');
   try {
-    const [{ openStage }, { pageRendererChoice }, { enterBackrooms }, { ARCHETYPES }] = await Promise.all([
-      import('./world/engine/stage.js'), import('./world/engine/gpu.js'), import('./world/backrooms/index.js'), import('./world/backrooms/gen.js')]);
-    // (the renderer: WebGL, as always, unless ?gpu=webgpu or a shell's stored choice asks for WebGPU: engine/gpu.js)
-    office.stage = await openStage(document.getElementById('stage'), { renderer: pageRendererChoice(), fx: false, antialias: false, shadows: false, pixelRatio: Math.min(window.devicePixelRatio || 1, 1.5) });
+    const [{ openStage }, { pageRendererChoice }, { enterBackrooms }, { ARCHETYPES }, launch] = await Promise.all([
+      import('./world/engine/stage.js'), import('./world/engine/gpu.js'), import('./world/backrooms/index.js'), import('./world/backrooms/gen.js'), import('./world/backrooms/launch.js')]);
+    // (the renderer: WebGPU, on its WebGL 2 backend where there is no WebGPU, unless ?gpu=webgl or a shell's stored choice
+    // asks for the old one: engine/gpu.js. A machine with neither is told so on a screen of its own: launch.js)
+    if (!(await launch.graphicsAvailable())) { launch.cantRun(); return; }
+    office.stage = await openStage(document.getElementById('stage'), { renderer: pageRendererChoice(), fx: false, antialias: false, shadows: false, pixelRatio: Math.min(window.devicePixelRatio || 1, 1.5) })
+      .catch((err) => { console.error(err); launch.cantRun(); return null; });
+    if (!office.stage) return;
     office.stage.start();
     // the tape this address names, if it names one, is the building walked; with none, one nobody has had. When it
     // is over the card comes up, and after the card the front page — unless the card for a kept tape is put down by
@@ -187,6 +191,9 @@ async function run() {
     // where the visitor appears to be, as the site's host tells the site (api/where): the second line of a banner in the
     // building. Asked once, not waited for long, not kept; with no answer the banner says what such banners say
     const where = await Promise.race([asked, pause(1500).then(() => '')]);
+    // the graphics screen, the first time (launch.js): static, the tiers, and Auto measuring the level behind it. Not for
+    // a bench run, nor under ?debug unless &launch=1 asks for it (then every time)
+    if (!bench && (dev.debug ? q.get('launch') === '1' : launch.shouldAsk())) await launch.firstLaunch({ office, enterBackrooms });
     for (;;) {
       const seed = next || fresh();
       // a tape this browser has kept is a tape played back (it says PLAY, hides nothing, and is paid nothing: core/runs.mjs);
@@ -216,6 +223,7 @@ async function run() {
         look: playerLook, perk: who.perk,
         difficulty: mine ? cleanDifficulty(mine.difficulty, 'training-wheels') : undefined,
         home: { label: 'Return to homepage' }, anew: { label: 'Go back in' }, where, ...dev,
+        onGraphicsTest: (handle) => launch.retest({ stage: office.stage, handle }),
         ...(room ? { only: [room] } : {}),
         ...(mine ? { replay: true, pursuer: typeof mine.mascot === 'boolean' ? mine.mascot : undefined } : {}),
       });

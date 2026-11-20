@@ -163,6 +163,8 @@ async function go() {
     pursuer: q.has('pursuer') ? q.get('pursuer') !== '0' : undefined, vhs: q.has('vhs') ? num('vhs', 2) : undefined, mute: q.has('mute') ? q.get('mute') !== '0' : undefined,
     graphics: q.get('graphics') || undefined,
     debug: true, scorecard: q.get('card') !== '0', home: { label: 'Return to homepage' }, where: q.get('where') || undefined,
+    // (Settings' Test, by Graphics: the graphics screen again, over the paused picture: launch.js)
+    onGraphicsTest: (handle) => import('../backrooms/launch.js').then((m) => m.retest({ stage, handle })),
     inventory: q.get('inventory') !== '0', barricades: q.get('barricades') !== '0',
     dev: { supplies: q.get('supplies') === '1', cast: (q.get('cast') || '').split(',').filter(Boolean), beside: q.get('beside') || null, wake: q.get('wake') === '1', barricadeStudy: q.get('barricades') === '1' && q.get('study') === '1',
       bridgeStudy: q.get('bridgestudy') === '1',
@@ -209,4 +211,6 @@ async function go() {
   over.innerHTML = `<div>the level is over: <b>${result.reason}</b><br>press any key for another visit</div>`;
   window.addEventListener('keydown', () => { if (!q.has('seed')) seed = Date.now(); else seed = `${seed}+`; go(); }, { once: true });
 }
+// &launch=1: the graphics screen of the first launch (launch.js), with the level measured behind it, before the visit
+if (q.get('launch') === '1') await (await import('../backrooms/launch.js')).firstLaunch({ office, enterBackrooms });
 go();

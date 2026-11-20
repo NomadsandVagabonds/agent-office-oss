@@ -77,6 +77,7 @@ export const MENU_CSS = `
 .br-menu-setting input[type="range"] { grid-column: 1 / -1; display: block; width: 100%; height: 30px; margin: -2px 0; accent-color: var(--menu-ink); cursor: ew-resize; background: transparent; touch-action: pan-y; }
 .br-menu-setting select { min-height: 40px; max-width: 100%; padding: 4px 26px 4px 9px; border: 1px solid var(--menu-rule); background: #101b15c4; font-size: 18px; }
 .br-menu-setting option { color: var(--menu-ink); background: #182019; }
+.br-menu-test { grid-column: 1 / -1; justify-self: end; min-height: 36px; padding: 4px 14px; border: 1px solid var(--menu-rule); background: #101b15c4; font-size: 16px; cursor: pointer; }
 .br-menu .retro-select { min-width: 0; width: min(270px, 100%); justify-self: end; }
 .br-menu-setting:has(.retro-select) { align-items: start; }
 .br-menu-setting:has(.retro-select) > label { padding-top: 5px; }

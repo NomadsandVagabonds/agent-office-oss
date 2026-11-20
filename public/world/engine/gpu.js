@@ -1,27 +1,25 @@
 // The Office — which renderer the stage draws with, and what code that has two
 // ways of drawing reads to pick one.
 //
-// WebGL (three.js WebGLRenderer) is what everything is written for, and it is
-// what the stage makes unless somebody asks for the other one. WebGPU (three.js
-// WebGPURenderer, with node materials) is opt-in while the port is under way
-// (docs/BLOCKROOMS-WEBGPU.md):
+// WebGPU (three.js WebGPURenderer, with node materials) is what the stage makes unless somebody asks for the other
+// one: the owner, 20 Nov, "I would rather some percentage of people not be able to play than to lower the experience
+// for those that do". Where there is no WebGPU adapter, WebGPURenderer draws on its own WebGL 2 backend; where there is
+// neither, the play page says so (backrooms/launch.js cantRun). WebGL (three.js WebGLRenderer) is what everything was
+// first written for, and stays as the escape hatch (docs/BLOCKROOMS-WEBGPU.md):
 //
-//   ?gpu=webgpu          on the play page's address (site.js; the dev page and the office do not ask yet)
 //   ?gpu=webgl           the old renderer, whatever is stored
-//   localStorage['blockrooms.renderer'] = 'webgpu'
+//   ?gpu=webgpu          the new one, whatever is stored
+//   localStorage['blockrooms.renderer'] = 'webgl' | 'webgpu'
 //                        the stored choice, for a shell (the Steam build) to set
 //                        before the page loads; the address wins over it
 //
-// WebGPURenderer falls back to its own WebGL 2 backend where there is no WebGPU
-// adapter, so 'webgpu' always means node materials, and `gpu.backend` says which
-// backend they ended up on.
+// 'webgpu' always means node materials, and `gpu.backend` says which backend they ended up on.
 //
-// Nothing here imports three.js: on the default path this module is a few bytes
-// and the WebGPU build is never fetched.
+// Nothing here imports three.js: the stage fetches the build it is asked for.
 
 /** The renderers there are, by name. */
 export const RENDERERS = Object.freeze(['webgl', 'webgpu']);
-export const DEFAULT_RENDERER = 'webgl';
+export const DEFAULT_RENDERER = 'webgpu';
 export const RENDERER_KEY = 'blockrooms.renderer';
 
 /**

@@ -5,7 +5,7 @@ materials, written in TSL. This is task R-5 of the Steam plan, D3 Rendering (`do
 `claude/backrooms-cast`). It is also the ground the Ultra tier (R-3) and "light that behaves" (R-4) can be built on.
 
 **Status (Steps 1–6 complete + GPU/WGSL optimization pass landed — ready for lead review):**
-- The switch is in, behind an opt-in flag (`?gpu=webgpu` on the play page and `/world/dev/backrooms.html`), plus a live side-by-side split-wipe showcase at `/world/dev/webgpu-demo.html`.
+- **WebGPU is the renderer for everybody since 20 Nov** (the owner's word; see "WebGPU for everybody, and the graphics screen" below). `?gpu=webgl` is the escape hatch. Before that it was opt-in (`?gpu=webgpu`). There is also a live side-by-side split-wipe showcase at `/world/dev/webgpu-demo.html`.
 - **Phase 1 (done):** the switch, room surface Classic core (`kit.js` / `kit-node.js`), voxel material (`vox/material.js`), and camcorder at Classic (`vhs.js` / `vhs-node.js`).
 - **Step 2 (done):** composable `patchNode` hooks on `kit-node.js`, `kit.points` instanced quads (`the-grotto` snow), held-item `depthNode` sliver (`setHeldInFront` on `hand.js` + `hand-notes.js`), `pool-optics.js`, all Classic room shader patches, `spray.js`, `inventory-fire.js`, `forest-fx.js`, `forest-maze.js`, and WebGPU-safe `the-sets` CCTV feed (`THREE.RenderTarget` with MRT/liquid guard).
 - **Step 3 (done):** `locker-showers/water.js` planar floor mirror via `ReflectorNode` (hiding `liquid:surface` meshes & guarding MRT).
@@ -13,15 +13,50 @@ materials, written in TSL. This is task R-5 of the Steam plan, D3 Rendering (`do
 - **Step 5 (done):** Complete one-pass `liquid-node.js` water — refraction, absorption, caustics, wave-pool swell (`swellGeometry` interleaved repack), underwater underside (Snell's window + overhead refraction), and High planar mirror (`ReflectorNode`, sized to `mirrorSize(sceneTarget)`).
 - **Step 6 (done):** High flashlight shadows (`kit-node-shadow.js` + `beam-shadows.js`, 9-tap hardware PCF in uniform WGSL control flow, `uTorch` & `uK.y` uniform skip gates, `warm()` pre-patching).
 - **GPU & WGSL Optimization Pass (done, verified at 104–120 fps on real Chromium WebGPU & WebGL 2):** full sheen-floor WGSL shrunk 13.1× (`292 KB → 22 KB`, lightmap fetches `41 → 4`), VHS Signal texture ops `118 → 22` (`14` runtime fetches/px with focus locked), flat water depth loads `9 → 2/px`, unused Retina 4× MSAA swapchain disabled on standalone BlockRooms, `test/blockrooms-webgpu-perf.test.mjs` guards compiled WGSL budgets.
-- **Next:** Step 7 (the office, co-op, dev tools — not needed for Steam BlockRooms), F-5 hardware benchmark matrix (WebGL vs WebGPU-WebGL2 vs WebGPU), and owner/lead sign-off before switching the web default.
-- Without the flag, Classic stays untouched (`antialias: false` on the unused swapchain only; same shaders and scene targets).
+- **Next:** Step 7 (the office, co-op, dev tools — not needed for Steam BlockRooms), and the F-5 hardware benchmark matrix (WebGL vs WebGPU-WebGL2 vs WebGPU), which now also says what the launch screen's Auto picks on real machines.
+- With `?gpu=webgl`, Classic is as it was (`antialias: false` on the unused swapchain only; same shaders and scene targets).
+
+## WebGPU for everybody, and the graphics screen (20 Nov)
+
+The owner: "I would rather some percentage of people not be able to play than to lower the experience for those that
+do." So `engine/gpu.js` now picks WebGPU unless `?gpu=webgl` (or a stored `webgl`) asks for the old renderer, and the
+play page preloads the WebGPU build.
+
+**A machine that can draw nothing** (no WebGPU adapter and no WebGL 2) gets a screen of tape static, `NO SIGNAL` and
+"THIS MACHINE CAN'T RUN BLOCKROOMS" (`backrooms/launch.js` `cantRun`), not a broken page. The same screen shows if the
+stage cannot be opened.
+
+**The graphics screen** (`backrooms/launch.js`, rules in `launch.rule.js`, tests in `test/blockrooms-launch.test.mjs`):
+- **On first launch:** tape static, then Auto, Low, Medium, High, with Auto chosen.
+- **Auto measures, it does not guess.** Behind the static the level itself is drawn: a quiet visit to a fixed building
+  (tape 7, Floor 1), built at High. Once it has landed, High is measured for 2 s while the view turns round the room,
+  after 0.8 s to settle. Medium is measured the same way only if High did not hold.
+  - A tier holds when half its frames take at most 25 ms (40 fps) and nine in ten at most 40 ms.
+  - The first tier that holds is Auto's pick; if neither does, Low.
+  - Measuring High first and stopping there is the upward bias the owner asked for.
+  - A machine that has not built and landed in 20 s gets Low.
+  - If nothing could be measured, Auto falls back to the in-game Auto setting, which starts at Medium and steps down.
+- Auto shows what it picked (`AUTO · HIGH`). The player can take it or another tier, by key, click or tap.
+- The choice becomes the Graphics setting and is remembered (`localStorage['blockrooms:graphics']`), so the screen does
+  not come back.
+- **Settings offers it again:** a Test button beside Graphics. It is measured on the paused picture of the visit, and
+  the choice applies at once.
+- **Classic** stays in Settings.
+- **No words** but the tiers' names and what Auto chose.
+- **Not shown** for `?debug&bench=1`, or under `?debug` unless `&launch=1` asks for it, which shows it every time. The
+  dev page shows it with `&launch=1`.
+- Each tier measured is logged to the console: `[graphics] high: median … ms, 9 in 10 under … ms, … fps`.
+
+Shots, on this container's software renderer, which picks Low (about 1 fps; it never lands in 20 s):
+`docs/webgpu/launch-measuring.jpg`, `launch-picked.jpg`, `launch-phone.jpg`, `launch-settings-test.jpg`,
+`launch-cant-run.jpg`. What Auto picks on real GPUs has not been seen yet; the owner's laptop is the first real check.
 
 ## The switch
 
 | | |
 |---|---|
-| Turn it on | `?gpu=webgpu` on the play page or `/world/dev/backrooms.html` (the office does not read it yet), or `localStorage['blockrooms.renderer'] = 'webgpu'` (for the Steam shell to set before the page loads) |
-| Force it off | `?gpu=webgl` (the address wins over the stored value) |
+| Default | WebGPU (`WebGPURenderer`, on its WebGL 2 backend where there is no WebGPU adapter), on the play page and `/world/dev/backrooms.html` (the office does not read it) |
+| Force it off | `?gpu=webgl`, or `localStorage['blockrooms.renderer'] = 'webgl'` (for the Steam shell to set before the page loads); the address wins over the stored value |
 | The rule | `public/world/engine/gpu.js` `rendererChoice()`, tested in `test/blockrooms-webgpu-flag.test.mjs` |
 | What it does | `engine/stage.js` `openStage()` fetches `vendor/three.webgpu.min.js` and makes a `WebGPURenderer`, then `await renderer.init()`. If there is no WebGPU adapter, three.js falls back to its own WebGL 2 backend: node materials still, compiled to GLSL ES 3.0. If even that fails, `openStage` falls back to the old `createStage`. The console says which one it got: `[stage] WebGPURenderer on its WebGPU backend` or `… WebGL 2 backend`. |
 | How code tells | `gpu.nodes` (`engine/gpu.js`) is the WebGPU build's module while the flag is on, and `null` otherwise. Every node path in the code is `if (gpu.nodes) …`, and the old code runs untouched otherwise. No module imports the WebGPU build. Only the stage loads it, and only under the flag. |

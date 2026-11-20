@@ -19,7 +19,7 @@ const CONTROLS = [
  * Camcorder controls over the frozen picture. onChange(key, value) is immediate;
  * the caller applies and saves it. setOpen never invokes pause/resume callbacks.
  */
-export function createMenu({ host, settings = {}, furniture = false, graphics: offerGraphics = true, onRequestOpen, onResume, onGiveUp, onChange, onArchive, tape, onReport } = {}) {
+export function createMenu({ host, settings = {}, furniture = false, graphics: offerGraphics = true, onGraphicsTest, onRequestOpen, onResume, onGiveUp, onChange, onArchive, tape, onReport } = {}) {
   const id = ++instance, prefix = `br-menu-${id}`;
   let opened = false, disposed = false, page = 'main', previousFocus = null;
   let values = { ...DEFAULTS, ...settings };
@@ -106,7 +106,11 @@ export function createMenu({ host, settings = {}, furniture = false, graphics: o
   graphics.addEventListener('change', () => change('graphics', graphics.value));
   // (offerGraphics false: the setting is kept and obeyed, but its row is not offered. index.js offers it to everybody since
   // the owner's ten-minute check passed, 17 Nov; it starts at Classic, which is the picture everybody had before)
-  if (offerGraphics) settingsPage.append(h('div.br-menu-setting', h('label', { htmlFor: graphics.id }, 'Graphics'), graphics));
+  // (onGraphicsTest: the graphics screen of the first launch again, measured on this picture: launch.js retest, by way
+  // of the page that has it to give, site.js. It comes up over the menu, through mount() below)
+  const graphicsTest = onGraphicsTest ? h('button.br-menu-test', { type: 'button' }, 'Test') : null;
+  graphicsTest?.addEventListener('click', () => onGraphicsTest());
+  if (offerGraphics) settingsPage.append(h('div.br-menu-setting', h('label', { htmlFor: graphics.id }, 'Graphics'), graphics, graphicsTest));
   const difficulty = h('select', { id: `${prefix}-difficulty`, 'aria-describedby': `${prefix}-difficulty-note` },
     DIFFICULTIES.map(d => h('option', { value: d.id }, d.label + (d.id === 'easy' ? ' (recommended)' : ''))));
   const difficultyNote = h('small', { id: `${prefix}-difficulty-note` });
@@ -194,6 +198,8 @@ export function createMenu({ host, settings = {}, furniture = false, graphics: o
   update();
   return {
     el, setOpen, update, handleKey,
+    /** Put something over the open menu, as its own (owns() says so): the graphics screen, from Settings. */
+    mount(node) { overlay.append(node); },
     get isOpen() { return opened; },
     owns(target) { return !!target && (launcher.contains(target) || (opened && overlay.contains(target))); },
     dispose() {
