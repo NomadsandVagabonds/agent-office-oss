@@ -19,7 +19,6 @@ export function prepareRoom(level,builders){
     c.shell();
     const x=-c.W*.215,z=Math.min(1,c.D*.15);
     const desktop=.65, deskCollider=c.solid(x-.8,z-.4,x+.8,z+.4,{top:desktop,keep:true});
-    c.shadow(x,z,1.6,.8,.35);
     const camera=buildItemProp(c.kit,'carbon-camera'), px=x+.49, pz=z+.10;
     camera.name='carbon-camera-pickup';
     camera.position.set(px,desktop+.003,pz);camera.rotation.y=2.63;c.add(camera);
@@ -60,6 +59,7 @@ export function attachStudy(h, stage) {
   const cameraId='chair-study:carbon-camera', eye=h.dev.viewCamera;
   const nativeChair=world.furniture.find(f=>f.room===rt.id&&f.type==='chair');
   const sources=[], livePickups=new WeakMap(), copies=new Set(), editions=new Map(), stocks=new Map();
+  const printedSources=new Set(), spentKey='carbon-lab-spent';
   const ui=panel(), find=createViewfinder(world.scene);
   const photo=env.kit.tex.custom('carbon-camera:film',128,128,g=>{g.fillStyle='#efe8d8';g.fillRect(0,0,128,128);},{clamp:true});
   const ray=new T.Raycaster(), centre=new T.Vector2(), hits=[];
@@ -88,7 +88,7 @@ export function attachStudy(h, stage) {
     reviewUntil=elapsed+.40;
   }
   function stockOf(id){if(!stocks.has(id))stocks.set(id,readStock(id));return stocks.get(id);}
-  function entry(id,x,z,y=0,collider=null,native=null) {
+  function entry(id,x,z,y=0,collider=null,native=null,support=null) {
     const stock=stockOf(id), pos=toWorld(def,x,z);
     let body=native?.group.children.find(m=>m.isMesh&&!m.material.transparent);
     if(!body){
@@ -96,13 +96,14 @@ export function attachStudy(h, stage) {
       body.position.set(pos.x,(def.y||0)+y,pos.z);body.rotation.y=turn;world.scene.add(body);
     }
     const f=native||{...pos,y:(def.y||0)+y,room:rt.id,collider};
+    f.supportProp=support;if(support)f.restY=f.y;
     f.stock=stock;f.body=body;f.turn=turn;f.label=stockLabel(id);
     sources.push(f);return f;
   }
   const original=entry('chair',0,0,0,null,nativeChair);
-  entry('desk',deskX,deskZ,0,deskCollider);
-  entry('crt',deskX,deskZ,desktop,deskCollider);
-  entry('keyboard',deskX,deskZ+.25,desktop,deskCollider);
+  const desk=entry('desk',deskX,deskZ,0,deskCollider);
+  entry('crt',deskX,deskZ,desktop,deskCollider,null,desk);
+  entry('keyboard',deskX,deskZ+.25,desktop,deskCollider,null,desk);
   function display(id,x,z){
     const s=entry(id,x,z), b=s.body.geometry.boundingBox;
     const f=worldFootprint({x,z,x0:x+b.min.x,z0:z+b.min.z,x1:x+b.max.x,z1:z+b.max.z,bottom:0,top:b.max.y},def,toWorld);
@@ -120,7 +121,7 @@ export function attachStudy(h, stage) {
   const span=specimen.cell*Math.max(b.x1-b.x0,b.y1-b.y0,b.z1-b.z0);
   if(span<.68){
     const plinth=display('pedestal',-1.45,-1.65);
-    entry(specimen.id,-1.45,-1.65,plinth.body.geometry.boundingBox.max.y,plinth.collider);
+    entry(specimen.id,-1.45,-1.65,plinth.body.geometry.boundingBox.max.y,plinth.collider,null,plinth);
   }else display(specimen.id,-1.45,-1.65);
   for(let i=0;i<4;i++)edition.add(new Option(['Registration slip','Repeated section','Wrong-way section','Feed jam'][i],String(i)));
   if(/^[0-3]$/.test(query.get('edition')||''))edition.value=query.get('edition');
@@ -129,7 +130,7 @@ export function attachStudy(h, stage) {
   };
   function variant(source) {
     const id=source.stock.id;
-    const n=edition.value==='cycle'?(source.prints||0)%4:Number(edition.value);
+    const n=edition.value==='cycle'?(source.editionIndex||0)%4:Number(edition.value);
     const key=id+':'+n;
     if(!editions.has(key)){
       const stock=developEdition(source.stock,n),geo=bake(stock,key);
@@ -156,7 +157,7 @@ export function attachStudy(h, stage) {
   function acquire(){
     let nearest=null,distance=REACH;
     function consider(s){
-      if(s.away||s.carried||s.twin||!s.body.visible)return;
+      if(s.away||s.carried||s.prints>=2||!s.body.visible)return;
       s.body.updateWorldMatrix(true,false); hits.length=0;
       ray.intersectObject(s.body,false,hits);
       if(hits.length&&hits[0].distance<distance&&clearLine(hits[0].point,s.collider)){nearest=s;distance=hits[0].distance;}
@@ -165,7 +166,7 @@ export function attachStudy(h, stage) {
     h.inventory.physical.forEachNearbyPickup(ray.ray.origin.x,ray.ray.origin.z,REACH,(item,body)=>{
       let s=livePickups.get(body);
       if(!s){
-        s={body,label:stockLabel(item.type),get stock(){return stockOf(item.type);},get away(){return !body.visible;},
+        s={body,pickupId:item.id,label:stockLabel(item.type),get stock(){return stockOf(item.type);},get away(){return !body.visible;},
           get x(){return body.matrixWorld.elements[12];},get y(){return body.matrixWorld.elements[13];},
           get z(){return body.matrixWorld.elements[14];},get turn(){return body.rotation.y+body.parent.rotation.y;}};
         livePickups.set(body,s);
@@ -227,34 +228,78 @@ export function attachStudy(h, stage) {
     }
     world.scene.attach(group);world.touchFurniture(f);world.refreshFurniture();f.source=source;copies.add(f);return f;
   }
-  function remove(f){if(!copies.delete(f))return;if(env.grip?.held===f)env.grip.release();if(f.source.twin===f)f.source.twin=null;f.remove();world.refreshFurniture();}
-  function stopFlight(){transfer?.stop();flight=null;}
+  function remove(f){
+    if(!copies.delete(f))return;
+    if(env.grip?.held===f)env.grip.release();
+    f.remove();world.refreshFurniture();
+  }
+  function setConsumed(source,consumed){
+    if(source.pickupId){
+      if(consumed)h.inventory.physical.takePickupAway(source.pickupId,spentKey);
+      return;
+    }
+    source.body.visible=!consumed;
+    if(source.group)source.away=consumed?spentKey:null;
+    if(source.collider&&!source.supportProp)source.collider.on=!consumed;
+    for(const child of sources)if(child.supportProp===source){
+      child.y=consumed?world.floorY(child.x,child.z):child.restY;
+      child.body.position.y=child.y;
+    }
+    world.touchFurniture(source);world.refreshFurniture();
+  }
+  function paidCopy(source,p,v){
+    const twin=makeCopy(p,source,v);
+    if(!twin)return null;
+    if(!h.inventory.model.spendPrint(cameraId)){remove(twin);return null;}
+    twin.paid=true;printedSources.add(source);
+    source.prints=(source.prints||0)+1;source.editionIndex=(source.editionIndex||0)+1;
+    return twin;
+  }
+  function stopFlight(){
+    transfer?.stop();
+    if(flight?.committedTwin){
+      flight.committedTwin.away=null;
+      world.refreshFurniture();
+    }
+    flight=null;
+  }
   function start(source,p,v=variant(source),paid=false){
-    if(flight||!fits(p,v)||source.carried||source.away||paid&&source.twin)return false;
+    if(flight||!fits(p,v)||source.carried||source.away||source.prints>=2)return false;
     if(rigPlate!==v||transfer?.source!==source){
       transfer?.dispose();transfer=createTransfer(world.scene,source.body,source.turn,v.geo,source.stock,v.stock,material);transfer.source=source;rigPlate=v;
     }
-    transfer.start(source,source.body,p,v.turn);flight={source,p,v,paid,t:0,x:source.x,z:source.z};return true;
+    // A destructive exposure is binding: reserve a real landing and take the
+    // charge before removing the source. Its earlier twin stays where it was.
+    let committedTwin=null;
+    if(paid&&source.prints===1){
+      committedTwin=paidCopy(source,p,v);
+      if(!committedTwin)return false;
+      committedTwin.away='carbon-lab-printing';
+      committedTwin.group.visible=false;
+    }
+    transfer.start(source,p,v.turn,!!committedTwin);
+    if(committedTwin)setConsumed(source,true);
+    flight={source,p,v,paid,committedTwin,t:0,x:source.x,z:source.z};return true;
   }
   function step(dt){
     if(!flight)return;
-    const {source,p,v,paid,x,z}=flight;
-    if(paid&&!inHand()||source.carried||source.away||source.x!==x||source.z!==z){stopFlight();say('Print interrupted.');return;}
+    const {source,p,v,paid,x,z,committedTwin}=flight;
+    if(!committedTwin&&(paid&&!inHand()||source.carried||source.away||source.x!==x||source.z!==z)){
+      stopFlight();say('Print interrupted.');return;
+    }
     flight.t+=dt;transfer.at(Math.min(1,flight.t/SECONDS));
     if(flight.t<SECONDS)return;
-    stopFlight();const twin=makeCopy(p,source,v);
-    if(!twin){say('Landing occupied. Try another spot.');return;}
-    if(paid){
-      if(!h.inventory.model.spendPrint(cameraId)){remove(twin);return;}
-      source.twin=twin;source.prints=(source.prints||0)+1;scanned=plate=null;doneUntil=elapsed+.55;
-    }
+    const twin=committedTwin||(paid?paidCopy(source,p,v):makeCopy(p,source,v));
+    stopFlight();
+    if(!twin){say('Print failed. Check the landing and battery.');return;}
+    if(paid){scanned=plate=null;doneUntil=elapsed+.55;}
     say(v.name+' · E to move the copy.');
   }
   function clearView(){if(owner!==null)h.hud.el.classList.remove('carbon-finder');owner=null;aligned=false;selected=landing=null;}
   function raise(who){
     if(!canAct()||!inHand()||bench.active||flight||env.grip?.held||owner!==null)return false;
     if(!h.inventory.held().charge){say('Fit a battery pack in your pockets.');return false;}
-    if(bench.result)for(const f of copies)if(f.source.twin!==f)remove(f);
+    if(bench.result)for(const f of copies)if(!f.paid)remove(f);
     owner=who;aligned=false;h.hud.el.classList.add('carbon-finder');return true;
   }
   function lower(who){
@@ -270,11 +315,17 @@ export function attachStudy(h, stage) {
       doneUntil=0;expose();env.sound.carbonCamera('scan');say(src.label+' on film.');
     }else if(scanned&&landing?.valid&&start(scanned,landing,plate,true)){
       env.sound.carbonCamera('print');
-    }else say(scanned?'Find clear floor for the whole object.':'Sight an original that has no twin.');
+    }else say(scanned?'Find clear floor for the whole object.':'Sight an original in the finder.');
   }
   function reset(){
     stopFlight();clearView();lift=0;if(env.grip?.held)env.grip.release();
     for(const f of [...copies])remove(f);
+    h.inventory.physical.bringBack(spentKey);
+    for(const source of printedSources){
+      if(source.prints===2)setConsumed(source,false);
+      source.prints=0;
+    }
+    printedSources.clear();
     original.translate(def.cx-original.x,def.cz-original.z,(def.y||0)-original.y);
     scanned=plate=null;notice='';until=reviewUntil=doneUntil=0;
     h.goto(rt.id,0,Math.min(2,def.D/2-.55),0,-.34);
@@ -325,7 +376,7 @@ export function attachStudy(h, stage) {
     if(!canAct()){blur();if(h.world!==world)stopFlight();return;}
     if(!ready){ready=true;h.goto(rt.id,pickupUse.x,Math.min(def.D/2-.40,pickupUse.z+1.16),0,-.24);h.dev.clock(false);}
     step(dt);elapsed+=dt;
-    if(scanned?.away){scanned=plate=null;say('Original lost. Hold to scan another object.');}
+    if(!flight&&scanned?.away){scanned=plate=null;say('Original lost. Hold to scan another object.');}
     for(const twin of copies){const glitch=twin.badRegistration;if(glitch)glitch.mesh.geometry=!quiet.matches&&(elapsed+glitch.phase)%5.3<.19?glitch.slip:glitch.stable;}
     if(!inHand()||env.grip?.held){clearView();lift=0;}
     const active=owner!==null;

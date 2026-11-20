@@ -218,6 +218,11 @@ export function createInventoryWorld(env, model, { canAct = () => true, onNotice
     forEachNearbyPickup(x,z,reach,visit) {
       for(const e of entries.values())if(e.active&&Math.hypot(e.wx-x,e.wz-z)<=reach)visit(e.item,e.mesh);
     },
+    takePickupAway(id,key) {
+      const e=entries.get(id);
+      if(!e?.active)return false;
+      e.active=false;e.away=key;e.mesh.visible=false;return true;
+    },
     spawn, dropSelected, dropSpot: item => groundSpot(ITEM_RADIUS[item.type], false, ITEM_HEIGHT[item.type]), canMark: () => !disposed && !!groundSpot(MARK_R, true), mark, ignite,
     fire: Object.freeze({ threatAt: fires.threatAt, burning: fires.report, douse: fires.douse }),
     // A co-op spectator renders only effects accepted by the authority.

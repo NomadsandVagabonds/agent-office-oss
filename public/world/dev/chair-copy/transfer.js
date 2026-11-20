@@ -18,7 +18,7 @@ function bands(base, above = false) {
   mesh.setIndex(order);
   mesh.boundingSphere = base.boundingSphere;
   function draw(y) {
-    let lo=0, hi=triangles.length;
+    let lo=y>=1?triangles.length:0, hi=triangles.length;
     while(lo<hi){const mid=(lo+hi)>>>1;if(triangles[mid].y < bottom+y*height)lo=mid+1;else hi=mid;}
     const start=above?lo*3:0, end=above?order.length:lo*3;
     mesh.setDrawRange(start,end-start);
@@ -84,27 +84,39 @@ function shell(stock, twin) {
   return {swarm,uniforms};
 }
 export function createTransfer(scene,template,rot,printGeometry,stock,twin,arrivalMaterial) {
-  const {swarm,uniforms}=shell(stock,twin), clean=bands(template.geometry), landing=bands(printGeometry,true);
-  const arriving=new T.Mesh(landing.mesh,arrivalMaterial||template.material);arriving.visible=false;
-  scene.add(arriving,swarm);uniforms.turn.value.set(Math.cos(rot),Math.sin(rot));
-  let mesh=null,original=null,read=clean;
-  function stop(){
-    if(mesh)mesh.geometry=original;
-    mesh=null;arriving.visible=false;swarm.visible=false;
-  }
+  const {swarm,uniforms}=shell(stock,twin), landing=bands(printGeometry,true);
+  const arriving=new T.Mesh(landing.mesh,arrivalMaterial||template.material);
+  let departure=null;
+  const departing=new T.Mesh(template.geometry,template.material);
+  departing.matrixAutoUpdate=false;
+  scene.add(arriving,departing,swarm);
+  function stop(){arriving.visible=departing.visible=swarm.visible=false;}
+  stop();
   return {
-    start(source,body,target,endTurn=rot){
-      stop();mesh=body;original=mesh.geometry;read=clean;mesh.geometry=read.mesh;
-      arriving.position.set(target.x,target.y,target.z);arriving.rotation.y=endTurn;uniforms.exitTurn.value.set(Math.cos(endTurn),Math.sin(endTurn));
+    start(source,target,endTurn=rot,consume=false){
+      stop();
+      // Only a spent original leaves a silhouette behind. The first print samples its
+      // surface for flying grains without ever touching the actual source mesh.
+      if(consume){
+        departure??=bands(template.geometry);
+        departing.geometry=departure.mesh;
+        template.updateWorldMatrix(true,false);
+        scene.updateWorldMatrix(true,false);
+        departing.matrix.copy(scene.matrixWorld).invert().multiply(template.matrixWorld);
+        departing.matrixWorldNeedsUpdate=true;departing.visible=true;
+      }
+      uniforms.turn.value.set(Math.cos(source.turn),Math.sin(source.turn));
+      arriving.position.set(target.x,target.y,target.z);arriving.rotation.y=endTurn;
+      uniforms.exitTurn.value.set(Math.cos(endTurn),Math.sin(endTurn));
       arriving.visible=true;swarm.visible=true;
       uniforms.from.value.set(source.x,source.y,source.z);uniforms.to.value.copy(arriving.position);
       this.at(0);
     },
     at(t){
       uniforms.clock.value=t;
-      // The original is read from the top down, then reconstitutes while its copy finishes.
-      read.draw(t<.45?1-t/.40:(t-.55)/.43);landing.draw(1-(t-.56)/.40);
+      if(departing.visible)departure.draw(1-t/.40);
+      landing.draw(1-(t-.56)/.40);
     },stop,
-    dispose(){stop();swarm.removeFromParent();arriving.removeFromParent();swarm.geometry.dispose();swarm.material.dispose();clean.mesh.dispose();landing.mesh.dispose();}
+    dispose(){stop();for(const mesh of [swarm,arriving,departing])mesh.removeFromParent();swarm.geometry.dispose();swarm.material.dispose();departure?.mesh.dispose();landing.mesh.dispose();}
   };
 }

@@ -39,6 +39,36 @@ test('Carbon Camera stocks every prop and pickup, with four distinct prints for 
   }
 });
 
+test('a Carbon Camera first print leaves every source triangle in place; only a consumed original dissolves', async () => {
+  const {createTransfer}=await import('../public/world/dev/chair-copy/transfer.js');
+  const {readStock}=await import('../public/world/dev/chair-copy/stock.js');
+  const scene=new THREE.Scene(), geometry=new THREE.BoxGeometry(1,1,1), body=new THREE.Mesh(geometry);
+  body.position.set(2,0,-1);
+  scene.add(body);
+  const stock=readStock('chair'), rig=createTransfer(scene,body,0,geometry,stock,stock);
+  const source={x:2,y:0,z:-1,turn:0}, landing={x:3,y:0,z:1};
+  rig.start(source,landing);
+  for(const time of [0,.25,.40,.55,.75,1]){
+    rig.at(time);
+    assert.equal(body.visible,true);
+    assert.equal(body.geometry,geometry);
+    assert.equal(geometry.drawRange.count,Infinity);
+  }
+  rig.start(source,landing,0,true);
+  const departing=scene.children.find(m=>m!==body&&m.visible&&m.geometry?.drawRange.count===geometry.index.count);
+  assert.ok(departing);
+  assert.deepEqual(departing.matrix.elements,body.matrixWorld.elements);
+  rig.at(.2);
+  assert.ok(departing.geometry.drawRange.count>0&&departing.geometry.drawRange.count<geometry.index.count);
+  rig.at(.65);
+  assert.equal(departing.geometry.drawRange.count,0);
+  rig.stop();
+  rig.start(source,landing);
+  assert.equal(departing.visible,false);
+  rig.dispose();
+  assert.deepEqual(scene.children,[body]);
+});
+
 for (const rot of [0, 1, 2, 3]) test(`runtime clearance: crawl openings and auto-duck survive bridge support, rotation ${rot}`, async t => {
   const kit = createKit(), generated = generate('crawl-runtime');
   const def = { ...generated.rooms[0], id: 0, kind: 'plain', rot, cx: 0, cz: 0, x: -6.1, z: -6.1, w: 12.2, d: 12.2, W: 12, D: 12, y: 1.7, H: 3,
