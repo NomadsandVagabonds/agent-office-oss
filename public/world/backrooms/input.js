@@ -31,10 +31,10 @@ export function createInput(o) {
     stickId = null; stickAt = null; state.stick.x = state.stick.y = 0; state.hurry = false;
     thumbs()?.stick(null);
   }
-  function endView(commit) {
+  function endView() {
     if (viewPointer === null) return;
     viewPointer = null;
-    o.lowerView?.(commit);
+    o.lowerView?.();
   }
   function pressView(e) {
     if (!o.raiseView?.()) return false;
@@ -42,7 +42,7 @@ export function createInput(o) {
     return true;
   }
   function clear() {
-    endView(false);
+    endView();
     keys.clear(); state.dx = state.dy = 0; state.firing = false; dropStick();
     dragging = false; press = null; wheel = 0; looks.clear();
     for (const name of pressing.values()) thumbs()?.down(name, false);
@@ -111,7 +111,6 @@ export function createInput(o) {
     if (blocked()) { clear(); return; }
     if (e.pointerType === 'touch') {
       if (e.target === hud.leave) { o.menu(); return; }
-      if ((e.target === hud.use || thumbs()?.act(e.target) === 'use') && pressView(e)) return;
       if (e.target === hud.use) { state.firing = true; firingId = e.pointerId; o.use({ finger: true }); return; }
       if (e.target === hud.tip) { o.key('r'); return; }
       const t = thumbs(), name = t?.act(e.target);
@@ -157,7 +156,7 @@ export function createInput(o) {
     // place would be silent until the second tap)
     if (e.type !== 'pointercancel') sound.start();
     if (viewPointer !== null && viewPointer === e.pointerId && (e.button === 0 || e.type === 'pointercancel')) {
-      endView(e.type === 'pointerup' && !blocked() && !owns(e));
+      endView();
     }
     const pendingPress = press; press = null;
     dragging = false; if (e.pointerType !== 'touch' || e.pointerId === firingId) { state.firing = false; firingId = null; }

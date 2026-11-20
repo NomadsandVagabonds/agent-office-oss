@@ -136,7 +136,7 @@ export function createInventory(env, { canAct = () => true, onOpen = () => {}, r
     if (item?.type === 'scissors') return snip({ quietMiss: !view.isOpen });
     if (item?.type === 'carbon-camera') {
       if (view.isOpen) view.setOpen(false);
-      tell('Hold the shutter or X to aim, then release.');
+      tell('Hold click or X to aim. Press E to copy, then E to paste.');
       return;
     }
     if (item?.type === 'flamingo') return stab({ quietMiss: !view.isOpen });

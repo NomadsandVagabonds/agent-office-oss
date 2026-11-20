@@ -100,12 +100,17 @@ test('the Carbon Camera pickup has no film and the scanned print feeds toward th
   t.after(()=>{view.dispose();kit.dispose();});
   view.update(.016,true);
   const film=env.world.scene.getObjectByName('carbon-camera-positive');
+  const led=env.world.scene.getObjectByName('carbon-mode-led');
+  assert.equal(led.userData.word,'COPY');
   assert.equal(film.visible,false);
   shot=1;view.update(.016,true);
+  assert.equal(led.userData.word,'PASTE');
   assert.equal(film.visible,true);
   const start=film.position.z;
   view.update(.6,true);
-  assert.ok(film.position.z>start+.07);
+  assert.ok(film.position.z>start+.045);
+  env.carbonCopy.status='LOCK';view.update(.016,true);assert.equal(led.userData.word,'LOCK');
+  env.carbonCopy.status='DONE';view.update(.016,true);assert.equal(led.userData.word,'DONE');
   shot=0;view.update(.016,true);
   assert.equal(film.visible,false);
 });

@@ -309,18 +309,22 @@ test("the right button while looking is the smash (what is in the hand's other u
 });
 
 
-test('raising a finder consumes one press and cancels on interruption', t => {
-  const ends=[];
-  const h=setup(t,{raiseView:()=>true,lowerView:commit=>ends.push(commit)});
+test('holding the finder leaves E usable and lowering never fires a shutter', t => {
+  let ends=0;
+  const h=setup(t,{raiseView:()=>true,lowerView:()=>ends++});
   h.window.emit('pointerdown',{target:h.canvas});
+  h.window.emit('keydown',{key:'e'}); h.window.emit('keydown',{key:'e',repeat:true});
+  h.window.emit('keyup',{key:'e'});
+  assert.equal(h.calls.use,1);
   h.window.emit('pointerup',{target:h.canvas});
-  assert.deepEqual(ends,[true]);
+  assert.equal(ends,1);
   h.window.emit('pointerdown',{target:h.canvas});
   h.window.emit('pointercancel',{target:h.canvas});
   h.window.emit('pointerup',{target:h.canvas});
   h.window.emit('pointerdown',{target:h.canvas});
   h.window.emit('blur');
   h.window.emit('pointerup',{target:h.canvas});
-  assert.deepEqual(ends,[true,false,false]);
+  assert.equal(ends,3);
+  assert.equal(h.calls.use,1);
   assert.equal(h.calls.click,0);
 });

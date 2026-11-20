@@ -204,6 +204,7 @@ async function visit(office, opt) {
   // (finger: a thumb has no mouse button. Its hand, with nothing in front of it to use, is the two hands a click is)
   const useIt = (how) => {
     if (!canAct() || inventory?.isOpen) return;
+    if (cur?.env.carbonCopy?.aiming && inventory?.held()?.type === 'carbon-camera') { cur.env.carbonCopy.shutter(); return; }
     if (cur?.env.grip?.action(currentUse)) { cur.env.grip.use(); return; }
     if (currentUse) { const use = currentUse; try { use.use(use); } catch (err) { console.warn('[backrooms] use', err); } return; }
     if (how?.finger) clickIt();
@@ -243,7 +244,7 @@ async function visit(office, opt) {
     blocked: () => paused || !!inventory?.isOpen,
     menu: () => setPaused(true), use: useIt, light: thumbLight, click: clickIt, wheel: () => {},
     raiseView: () => canAct() && !inventory?.isOpen && inventory?.held()?.type === 'carbon-camera' && cur?.env.carbonCopy?.raise('pointer'),
-    lowerView: commit => cur?.env.carbonCopy?.lower('pointer', commit),
+    lowerView: () => cur?.env.carbonCopy?.lower('pointer'),
     // the right button: with the extinguisher in the hand, its foot (extinguisher.js smash); otherwise nothing
     smash: () => { if (canAct() && !inventory?.isOpen && inventory?.held()?.type === 'extinguisher') cur?.env.extinguisher?.smash?.(); },
     key(k) {
@@ -701,7 +702,7 @@ async function visit(office, opt) {
     env.extinguisher?.update(dt, !!input.state.firing && canAct() && !inventory?.isOpen);   // (squeezed and held: it goes on spraying past the burst)
     currentUse = canAct() && !inventory?.isOpen ? world.usable(me) : null;
     const grip = env.grip, furniture = grip?.action(currentUse);
-    hud.hint(!!currentUse || !!furniture, furniture ? grip.blocked ? 'Find space to set down' : `E · ${grip.held ? 'Set down' : 'Move'} ${furniture.label || furniture.type}` : 'E', !!furniture);
+    hud.hint(!env.carbonCopy?.aiming && (!!currentUse || !!furniture), furniture ? grip.blocked ? 'Find space to set down' : `E · ${grip.held ? 'Set down' : 'Move'} ${furniture.label || furniture.type}` : 'E', !!furniture);
     hud.tipHint(grip?.held?.bridge ? performance.now() < tipUntil && tipNote || `R · ${grip.held.deployed ? 'Raise' : 'Lower'} panel` : '');
 
     // the camcorder copes with the dark: more gain (and more noise), then its little lamp

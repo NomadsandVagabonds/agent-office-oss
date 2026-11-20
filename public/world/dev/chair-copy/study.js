@@ -42,10 +42,11 @@ function panel(){
   #chair-copy p{margin:6px 0}#chair-copy small{color:#c8cebd}#chair-copy button{font:inherit;cursor:pointer;color:#202821;padding:4px 7px;border:1px solid #acb395;background:#d9dfc9}
   #chair-copy .controls{display:flex;gap:5px;margin:6px 0}#chair-copy output{display:block;font-size:11px;color:#e6e7ac}
   #chair-copy select{max-width:117px}#chair-copy summary{cursor:pointer}#chair-copy details label{display:flex;justify-content:space-between;margin:5px 0}#chair-copy a{color:#c5f4da}#chair-copy [data-use]{touch-action:none;user-select:none}
+  @media(max-width:600px) and (max-aspect-ratio:3/4){.backrooms.carbon-finder .br-inventory:not(.is-open) .br-inv-pack{bottom:auto;top:calc(100% + 22px)}}
   @media(max-height:490px){#chair-copy{padding:5px 8px;font-size:10px;bottom:4px}#chair-copy p{margin:2px}}
   </style><header><b>CARBON CAMERA</b><span data-count></span></header>
   <p data-hint>Pick up the copier beside the monitor.</p>
-  <div class="controls"><button data-use>E · Pick up</button><button data-reset>Reset copies</button></div>
+  <div class="controls"><button data-use>E · Pick up</button><button data-shutter hidden>Copy</button><button data-reset>Reset copies</button></div>
   <details><summary>Copy lab</summary><label>Test object <select data-stock></select></label>
   <label>Misprint <select data-edition><option value="cycle">Cycle four</option></select></label>
   <a href="/world/dev/chair-copy/contact-sheets.html" target="_blank" rel="noopener">Polaroid catalogue</a> · <button data-bench>Test FPS</button>
@@ -77,6 +78,15 @@ export function attachStudy(h, stage) {
   }
   const material=env.kit.surface({vox:true});
   const quiet=matchMedia('(prefers-reduced-motion: reduce)');let flickerChair=null,printCount=0;
+  const flash=document.createElement('div');
+  flash.setAttribute('aria-hidden','true');
+  flash.style.cssText='position:absolute;inset:0;pointer-events:none;opacity:0;background:radial-gradient(ellipse at center,#fff8dc 0%,#fff2d2 40%,#cfc9aa 100%)';
+  h.hud.el.querySelector('.br-frame').prepend(flash);
+  let reviewUntil=0, doneUntil=0;
+  function expose(){
+    if(!quiet.matches)flash.animate([{opacity:.52},{opacity:.12,offset:.36},{opacity:0}],{duration:175,easing:'ease-out'});
+    reviewUntil=elapsed+.40;
+  }
   function stockOf(id){if(!stocks.has(id))stocks.set(id,readStock(id));return stocks.get(id);}
   function entry(id,x,z,y=0,collider=null,native=null) {
     const stock=stockOf(id), pos=toWorld(def,x,z);
@@ -236,39 +246,43 @@ export function attachStudy(h, stage) {
     if(!twin){say('Landing occupied. Try another spot.');return;}
     if(paid){
       if(!h.inventory.model.spendPrint(cameraId)){remove(twin);return;}
-      source.twin=twin;source.prints=(source.prints||0)+1;scanned=plate=null;
+      source.twin=twin;source.prints=(source.prints||0)+1;scanned=plate=null;doneUntil=elapsed+.55;
     }
     say(v.name+' · E to move the copy.');
   }
-  function clearView(){owner=null;aligned=false;selected=landing=null;find.show(null,null,null,0);}
+  function clearView(){if(owner!==null)h.hud.el.classList.remove('carbon-finder');owner=null;aligned=false;selected=landing=null;}
   function raise(who){
     if(!canAct()||!inHand()||bench.active||flight||env.grip?.held||owner!==null)return false;
     if(!h.inventory.held().charge){say('Fit a battery pack in your pockets.');return false;}
     if(bench.result)for(const f of copies)if(f.source.twin!==f)remove(f);
-    owner=who;aligned=false;return true;
+    owner=who;aligned=false;h.hud.el.classList.add('carbon-finder');return true;
   }
-  function lower(who,commit){
-    if(owner!==who)return;
-    if(commit&&aligned&&canAct()&&inHand()&&!env.grip?.held){
-      target();
-      if(!scanned&&selected){
-        const src=selected;plate={...variant(src),turn:src.turn};scanned=src;shot++;
-        drawPositive(photo.image.getContext('2d'),src.stock);photo.needsUpdate=true;
-        env.sound.carbonCamera('scan');say(src.label+' on film. Hold to place.');
-      }else if(scanned&&landing?.valid&&start(scanned,landing,plate,true)){
-        env.sound.carbonCamera('print');
-      }else say(scanned?'Find clear floor for the whole object.':'Sight an original that has no twin.');
-    }
-    clearView();
+  function lower(who){
+    if(owner===who)clearView();
+  }
+  function shutter(){
+    if(!owner||!aligned||!canAct()||!inHand()||env.grip?.held||flight||elapsed<reviewUntil)return;
+    if(!h.inventory.held().charge){say('Fit a battery pack in your pockets.');return;}
+    target();
+    if(!scanned&&selected){
+      const src=selected;plate={...variant(src),turn:src.turn};scanned=src;shot++;
+      drawPositive(photo.image.getContext('2d'),src.stock);photo.needsUpdate=true;
+      doneUntil=0;expose();env.sound.carbonCamera('scan');say(src.label+' on film.');
+    }else if(scanned&&landing?.valid&&start(scanned,landing,plate,true)){
+      env.sound.carbonCamera('print');
+    }else say(scanned?'Find clear floor for the whole object.':'Sight an original that has no twin.');
   }
   function reset(){
     stopFlight();clearView();lift=0;if(env.grip?.held)env.grip.release();
     for(const f of [...copies])remove(f);
     original.translate(def.cx-original.x,def.cz-original.z,(def.y||0)-original.y);
-    scanned=plate=null;notice='';until=0;
+    scanned=plate=null;notice='';until=reviewUntil=doneUntil=0;
     h.goto(rt.id,0,Math.min(2,def.D/2-.55),0,-.34);
   }
-  env.carbonCopy={take,raise,lower,photo,exposure:id=>id===cameraId&&scanned?shot:0,
+  env.carbonCopy={take,raise,lower,shutter,photo,exposure:id=>id===cameraId&&scanned?shot:0,
+    get aiming(){return owner!==null;},
+    get printProgress(){return flight?.paid ? Math.min(1,flight.t/SECONDS) : 0;},
+    get status(){return flight?.paid?'LOCK':elapsed<doneUntil?'DONE':!h.inventory.held()?.charge?'BATT':scanned?'PASTE':'COPY';},
     get lift(){return lift*lift*(3-2*lift);},sighted(){aligned=owner!==null&&lift===1;}};
   const bench=frameTest({h,stage,world,original,copies,point,start,makeCopy,remove,reset,canAct,
     running:()=>!!flight,alive:()=>!dead,setText:s=>{ui.timing.textContent=s;}});
@@ -283,15 +297,25 @@ export function attachStudy(h, stage) {
     try{await bench.run();if(!dead)save.hidden=!bench.result;}catch(e){if(!dead)ui.timing.textContent=e.message;}}
   const down=e=>{if(e.repeat||e.ctrlKey||e.metaKey||e.altKey||/INPUT|TEXTAREA|SELECT/.test(e.target.tagName))return;
     if(e.code==='KeyX')raise('key');else if(e.code==='KeyB')run();
+    else if(e.code==='KeyE'&&ui.el.contains(e.target))shutter();
     else if(e.code==='KeyR'&&owner&&scanned&&!flight){plate.turn+=Math.PI/2;target();}};
-  const up=e=>{if(e.code==='KeyX')lower('key',true);};
-  const blur=()=>{clearView();lift=0;};
+  const up=e=>{if(e.code==='KeyX')lower('key');};
+  const blur=()=>{clearView();lift=0;reviewUntil=0;find.show(null,null,null,0);};
   const visibility=()=>{if(document.hidden)blur();};
   ui.action.onclick=()=>{if(pickup.visible)take();};
-  ui.action.onpointerdown=e=>{if(e.button===0&&!pickup.visible&&raise('panel')){ui.action.setPointerCapture(e.pointerId);e.preventDefault();}};
-  ui.action.onpointerup=()=>lower('panel',true);ui.action.onlostpointercapture=ui.action.onpointercancel=()=>lower('panel',false);
+  const touchAction=ui.el.querySelector('[data-shutter]');
+  let touchAimer=matchMedia('(pointer:coarse)').matches;
+  touchAction.onclick=shutter;
+  ui.action.onpointerdown=e=>{
+    if(e.button!==0||pickup.visible)return;
+    touchAimer=e.pointerType==='touch';
+    if(touchAimer){if(owner==='touch')lower('touch');else raise('touch');}
+    else if(raise('panel'))ui.action.setPointerCapture(e.pointerId);
+    e.preventDefault();
+  };
+  ui.action.onpointerup=ui.action.onlostpointercapture=ui.action.onpointercancel=()=>lower('panel');
   ui.action.onkeydown=e=>{if(!pickup.visible&&['Space','Enter'].includes(e.code)){e.preventDefault();if(!e.repeat)raise('panel-key');}};
-  ui.action.onkeyup=e=>{if(['Space','Enter'].includes(e.code))lower('panel-key',true);};
+  ui.action.onkeyup=e=>{if(['Space','Enter'].includes(e.code))lower('panel-key');};
   edition.onchange=()=>{if(scanned&&!flight)plate={...variant(scanned),turn:plate.turn};};
   ui.el.querySelector('[data-bench]').onclick=run;
   ui.el.querySelector('[data-reset]').onclick=()=>{if(canAct()&&!bench.active){reset();ui.timing.textContent='';save.hidden=true;}};
@@ -307,20 +331,28 @@ export function attachStudy(h, stage) {
     const active=owner!==null;
     // A quick tap cannot take a photograph. Give the raised sight a frame on the optical axis first.
     lift=Math.min(1,Math.max(0,lift+(active?1:-1)*dt/.20));
-    if(active&&aligned){target();find.show(selected,plate,landing,elapsed);}
+    if(flight?.paid){
+      find.show(null,flight.v,flight.p,elapsed,Math.min(1,flight.t/SECONDS));
+    }else if(active&&aligned&&scanned&&elapsed<reviewUntil){
+      selected=landing=null;
+      find.show(scanned,null,null,elapsed,-1,Math.max(0,(reviewUntil-elapsed)/.4)*(quiet.matches ? .24 : 1));
+    }else if(active&&aligned&&h.inventory.held()?.charge){target();find.show(selected,plate,landing,elapsed);}
     else find.show(null,null,null,0);
     if(performance.now()<uiTime)return;uiTime=performance.now()+65;
     ui.count.textContent=copies.size?copies.size+(copies.size===1?' twin':' twins'):'';
-    ui.action.textContent=pickup.visible?'E · Pick up':active?'Release shutter':'Hold to aim';
-    ui.action.disabled=bench.active||!!flight||(pickup.visible?world.usable(h.player.me)!==pickupUse:!inHand());
+    ui.action.textContent=pickup.visible?'E · Pick up':touchAimer?(active?'Lower':'Aim'):(active?'Aiming':'Hold to aim');
+    ui.action.disabled=bench.active||(pickup.visible?world.usable(h.player.me)!==pickupUse:!inHand());
+    touchAction.hidden=owner!=='touch';touchAction.textContent=scanned?'Paste':'Copy';
+    touchAction.disabled=!aligned||!!flight||elapsed<reviewUntil||!h.inventory.held()?.charge;
     ui.hint.textContent=bench.active?'Measuring the chair transfer…':flight?'Printing '+flight.source.label+'…':
-      active?(lift<1?'Raising finder…':scanned?(landing?.valid?'Release to print · R to rotate':landing?'Blocked · R to rotate or move the projection':'Aim at the floor'):(selected?'Release to scan · '+selected.label:'Find an original in the wire sight')):
+      active?(lift<1?'Raising finder…':elapsed<reviewUntil&&scanned?scanned.label+' copied.':elapsed<doneUntil?'Paste complete.':!h.inventory.held()?.charge?'Fit a battery pack.':
+        scanned?(landing?.valid?(touchAimer?'Tap Paste to lock the projection.':'E · Paste here · R to rotate'):landing?'Blocked · move the projection':'Aim at the floor'):(selected?(touchAimer?'Tap Copy · ':'E · Copy ')+selected.label:'Find an original in the wire sight')):
       performance.now()<until?notice:pickup.visible?'E to take the Carbon Camera beside the monitor.':!inHand()?'Select the pocket holding the Carbon Camera.':
-      !h.inventory.held().charge?'Combine a battery pack with the copier.':scanned?scanned.label+' on film · hold click or X to place.':'Hold click or X to sight an object. Release to scan.';
+      !h.inventory.held().charge?'Combine a battery pack with the copier.':touchAimer?'Tap Aim, then Copy or Paste.':scanned?scanned.label+' on film · hold click or X, then E to paste.':'Hold click or X to aim. Press E to copy.';
   });
   window.__chairCopy={get copies(){return [...copies];},get flight(){return !!flight;},get scanned(){return scanned;},get result(){return bench.result;},get selected(){return selected;},get landing(){return landing;},get sources(){return sources;},run,reset};
-  return ()=>{dead=true;delete env.carbonCopy;bench.stop();off();stopFlight();transfer?.dispose();find.dispose();
+  return ()=>{dead=true;clearView();delete env.carbonCopy;bench.stop();off();stopFlight();transfer?.dispose();find.dispose();
     for(const f of [...copies])remove(f);for(const s of sources)if(s!==original)s.body.removeFromParent();
     window.removeEventListener('keydown',down,true);window.removeEventListener('keyup',up,true);window.removeEventListener('blur',blur);
-    document.removeEventListener('visibilitychange',visibility);ui.el.remove();delete window.__chairCopy;};
+    document.removeEventListener('visibilitychange',visibility);flash.remove();ui.el.remove();delete window.__chairCopy;};
 }

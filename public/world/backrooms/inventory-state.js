@@ -4,7 +4,7 @@ import { CRAFTING_TUNING, previewCraft } from './crafting.js';
 import { EXTINGUISHER } from './extinguisher.rule.js';
 
 export const ITEM_DEFS = Object.freeze({
-  'carbon-camera': Object.freeze({ name: 'Carbon Camera', description: 'An instant copier. Hold the shutter to look through the sight. Release on an object to scan, then on clear floor to print.', useLabel: 'How to aim', maxCharge: CRAFTING_TUNING.copierCharge }),
+  'carbon-camera': Object.freeze({ name: 'Carbon Camera', description: 'Hold click or X to look through the finder. Press E to copy an object. Aim at clear floor and press E to paste.', useLabel: 'How to aim', maxCharge: CRAFTING_TUNING.copierCharge }),
   torch: Object.freeze({ name: 'Flashlight', description: 'A worn hand torch. Its narrow beam reaches into the unlit corners.', useLabel: 'Switch on', maxCharge: CRAFTING_TUNING.torchCharge }),
   battery: Object.freeze({ name: 'Battery pack', description: 'A pair of heavy cells wrapped together. Fits the camera or flashlight.', useLabel: 'Fit batteries' }),
   chalk: Object.freeze({ name: 'Chalk', description: 'A short piece of white chalk. Leave a mark to recognize a place again.', useLabel: 'Mark floor', maxUses: 6 }),

@@ -275,7 +275,7 @@ export function createHandView(env, camera) {
       if (type === 'scissors') shown.update(dt, at);           // (the jab, and how it went: hand-scissors.rule.js)
       else if (type === 'carbon-camera') {
         const copier = env.carbonCopy;
-        shown.update(dt, at, item, copier?.exposure(item.id), copier?.lift);
+        shown.update(dt, at, item, copier?.exposure(item.id), copier?.lift, copier?.status, copier?.printProgress);
         if (copier?.lift === 1) copier.sighted();
       }
       else if (type === 'extinguisher') shown.update(dt, at, item);
