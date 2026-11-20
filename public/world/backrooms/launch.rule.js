@@ -5,15 +5,18 @@
 // The owner, 20 Nov: "graphics are important enough that maybe it is a screen right at launch... static and then the
 // graphics selector with auto choosing what it thinks is best. I really want more people to experience high if possible
 // because it is sooooo much more immersive." So Auto measures, it does not guess: the level itself is drawn behind the
-// static at High, then (only if High does not hold) at Medium, and the first that holds is the pick. What is left is Low.
+// static at the top tier (High, or Ultra once there is one), then each lower one only while none has held, and the first
+// that holds is the pick. What is left is Low.
 import { GRAPHICS } from './graphics.js';
 
-/** The tiers the screen offers, lowest first, after Auto (Ultra goes on the end when there is one). Classic stays in Settings. */
-export const LAUNCH_TIERS = Object.freeze(['low', 'medium', 'high']);
+// (Ultra, once graphics.js has it, is offered and measured with the rest, first of all: nothing more to change here)
+const ULTRA = GRAPHICS.includes('ultra') ? ['ultra'] : [];
+/** The tiers the screen offers, lowest first, after Auto. Classic stays in Settings. */
+export const LAUNCH_TIERS = Object.freeze(['low', 'medium', 'high', ...ULTRA]);
 /** Where the choice is remembered: once there is one, the screen is not shown again until Settings asks for it. */
 export const LAUNCH_KEY = 'blockrooms:graphics';
 /** Tried top down; the first that holds is Auto's. Low is never measured: it is what is left. */
-export const BENCH_ORDER = Object.freeze(['high', 'medium']);
+export const BENCH_ORDER = Object.freeze([...ULTRA, 'high', 'medium']);
 
 /**
  * The benchmark. tape: the building drawn behind the static (a fixed one, so that the walk is the same on any machine;

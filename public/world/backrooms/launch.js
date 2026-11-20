@@ -2,10 +2,10 @@
 //
 // First launch (site.js, before the first visit; the dev page with &launch=1): tape static, and over it the tiers, Auto
 // first and chosen. Behind the static the level is drawn for real: a visit to a fixed building (launch.rule.js BENCH),
-// quiet, with nobody in it, built at High; once it has landed, High is measured while the view turns round the room,
-// then Medium only if High did not hold. Auto shows what it picked; the player may take it or another tier, and the
-// choice is the Graphics setting from then on, remembered (launch.rule.js LAUNCH_KEY) so that the screen does not come
-// back. Settings offers it again (menu.js Test, by Graphics): then it is measured on the paused picture of the visit
+// quiet, with nobody in it, built at the top tier (High, or Ultra once there is one); once it has landed, that tier is
+// measured while the view turns round the room, then each lower one only while none has held. Auto shows what it
+// picked; the player may take it or another tier, and the choice is the Graphics setting from then on, remembered
+// (launch.rule.js LAUNCH_KEY) so that the screen does not come back. Settings offers it again (menu.js Test, by Graphics): then it is measured on the paused picture of the visit
 // itself, and the choice is applied there and then.
 //
 // No words but the tiers' names and what Auto chose: words live in the world (the owner's rule).
@@ -50,28 +50,57 @@ export async function graphicsAvailable() {
 /* ---- the look ------------------------------------------------------------------------------------ */
 
 const CSS = `
-@font-face { font-family: "Pixelify Sans"; src: url("/vendor/fonts/pixelify-sans-400.woff2") format("woff2"); font-weight: 400; font-display: swap; }
-.br-launch { position: fixed; inset: 0; z-index: 60; display: grid; place-items: center; background: #0a0a08; color: #f1ead8;
-  font: 400 22px/1.2 "Pixelify Sans", ui-monospace, Menlo, Consolas, monospace; letter-spacing: .14em;
+.br-launch { position: fixed; inset: 0; z-index: 60; display: grid; place-items: center; overflow: hidden; background: #0a0a08; color: #f4f1e6;
+  font: 700 22px/1.2 "Courier New", ui-monospace, Menlo, Consolas, monospace; letter-spacing: .1em;
   -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent; transition: opacity .45s; }
 .br-launch.is-gone { opacity: 0; pointer-events: none; }
-.br-launch-static { position: absolute; inset: 0; width: 100%; height: 100%; opacity: .7; }
-.br-launch-list { position: relative; display: grid; gap: 4px; padding: 14px; min-width: min(320px, calc(100vw - 32px)); box-sizing: border-box;
-  background: rgba(10, 10, 8, .8); box-shadow: 0 0 0 1px rgba(241, 234, 216, .2); opacity: 0; transition: opacity .35s; }
+.br-launch-static { position: absolute; inset: 0; width: 100%; height: 100%; opacity: .6; }
+/* the tape's lines, and the dark at the edges of an old tube */
+.br-launch-lines { position: absolute; inset: 0; pointer-events: none;
+  background: repeating-linear-gradient(to bottom, rgba(0, 0, 0, .3) 0 1px, transparent 1px 3px), radial-gradient(ellipse at center, transparent 50%, rgba(0, 0, 0, .7) 100%); }
+/* the viewfinder: its four corners, and the red dot of a camcorder that is on */
+.br-launch-frame { position: absolute; inset: max(14px, 4vmin); pointer-events: none; }
+.br-launch-frame i { position: absolute; width: clamp(18px, 5vmin, 40px); height: clamp(18px, 5vmin, 40px); border: 3px solid rgba(244, 241, 230, .85);
+  filter: drop-shadow(0 1px 1px rgba(0, 0, 0, .7)); }
+.br-launch-frame i:nth-child(1) { left: 0; top: 0; border-right: 0; border-bottom: 0; }
+.br-launch-frame i:nth-child(2) { right: 0; top: 0; border-left: 0; border-bottom: 0; }
+.br-launch-frame i:nth-child(3) { left: 0; bottom: 0; border-right: 0; border-top: 0; }
+.br-launch-frame i:nth-child(4) { right: 0; bottom: 0; border-left: 0; border-top: 0; }
+.br-launch-frame b { position: absolute; left: clamp(28px, 7vmin, 60px); top: clamp(26px, 6.5vmin, 56px); width: 16px; height: 16px; border-radius: 50%;
+  background: #ff3a26; box-shadow: 0 0 8px rgba(255, 58, 38, .75); animation: br-launch-blink 1.4s steps(2, start) infinite; }
+.br-launch-stack { position: relative; display: flex; flex-direction: column; align-items: center; gap: clamp(14px, 4vmin, 34px);
+  padding: 16px; max-width: 100%; box-sizing: border-box; }
+.br-launch-logo { display: block; width: min(76vw, 420px, 50vh); height: auto; image-rendering: pixelated; filter: drop-shadow(0 5px 0 rgba(0, 0, 0, .6)); }
+/* the camcorder's own menu: its lettering (hud.js), fringed red and blue as a tape smears it, on a dark band, with the
+   picture's tracking slipping now and then */
+.br-launch-list { position: relative; display: grid; gap: 3px; padding: 12px 14px 14px; min-width: min(330px, calc(100vw - 32px)); box-sizing: border-box;
+  background: rgba(8, 8, 6, .76); text-shadow: .055em 0 rgba(255, 60, 40, .45), -.055em 0 rgba(60, 220, 255, .4), 0 .08em .1em rgba(0, 0, 0, .85);
+  opacity: 0; transition: opacity .35s; animation: br-launch-track 7s steps(1) infinite; }
 .br-launch-list.is-up { opacity: 1; }
-.br-launch-row { position: relative; appearance: none; margin: 0; border: 0; border-radius: 0; padding: 11px 16px 11px 40px; background: none; color: inherit;
-  font: inherit; letter-spacing: inherit; text-align: left; cursor: pointer; text-shadow: 0 0 3px rgba(241, 234, 216, .45); touch-action: manipulation; }
-.br-launch-row.is-on { background: #f1ead8; color: #0a0a08; text-shadow: none; }
+.br-launch-head { padding: 2px 16px 10px 40px; margin-bottom: 6px; border-bottom: 2px solid rgba(244, 241, 230, .55); letter-spacing: .24em; }
+.br-launch-row { position: relative; appearance: none; margin: 0; border: 0; border-radius: 0; padding: 10px 16px 10px 40px; background: none; color: inherit;
+  font: inherit; letter-spacing: inherit; text-align: left; text-shadow: inherit; cursor: pointer; touch-action: manipulation; }
+.br-launch-row.is-on { background: #f4f1e6; color: #15140f; text-shadow: none; }
 .br-launch-row.is-on::before { content: "\\25B6"; position: absolute; left: 14px; }
 .br-launch-row:focus { outline: none; }
-.br-launch-row:focus-visible { outline: 1px dashed currentColor; outline-offset: -5px; }
+.br-launch-row:focus-visible { outline: 2px dashed currentColor; outline-offset: -5px; }
+.br-launch-row.is-on:focus-visible { outline-color: transparent; }
 .br-launch-pick { opacity: .72; }
 .br-launch-wait { animation: br-launch-blink 1s steps(2, start) infinite; }
 @keyframes br-launch-blink { to { visibility: hidden; } }
-.br-launch-fault { position: relative; display: grid; gap: 14px; padding: 18px 22px; max-width: calc(100vw - 32px); box-sizing: border-box; text-align: center;
-  background: rgba(10, 10, 8, .8); font-size: 16px; }
-.br-launch-fault strong { color: #ff3a26; font-size: 34px; font-weight: 400; }
-@media (prefers-reduced-motion: reduce) { .br-launch-wait { animation: none; } }
+@keyframes br-launch-track { 0%, 91%, 100% { transform: none; } 92% { transform: translateX(4px) skewX(-3deg); } 93% { transform: translateX(-3px); } 94% { transform: translateX(1px) skewX(1deg); } }
+.br-launch-fault { position: relative; display: grid; gap: 14px; padding: 16px 22px; max-width: calc(100vw - 32px); box-sizing: border-box; text-align: center;
+  background: rgba(8, 8, 6, .76); font-size: 16px; text-shadow: .055em 0 rgba(255, 60, 40, .45), -.055em 0 rgba(60, 220, 255, .4), 0 .08em .1em rgba(0, 0, 0, .85); }
+.br-launch-fault strong { color: #ff3a26; font-size: 34px; }
+@media (max-width: 420px) { .br-launch { font-size: 19px; } }
+/* a phone on its side: the name beside the menu, not over it */
+@media (orientation: landscape) and (max-height: 520px) {
+  .br-launch { font-size: 18px; }
+  .br-launch-stack { flex-direction: row; gap: clamp(18px, 5vw, 48px); }
+  .br-launch-logo { width: min(38vw, 340px, 62vh); }
+  .br-launch-row { padding-top: 7px; padding-bottom: 7px; }
+}
+@media (prefers-reduced-motion: reduce) { .br-launch-wait, .br-launch-frame b, .br-launch-list { animation: none; } }
 `;
 let styled = false;
 function style() {
@@ -80,12 +109,21 @@ function style() {
   document.head.append(h('style', { id: 'br-launch-css' }, CSS));
 }
 
-/** A screen of tape static, put in `host` (or returned to be put somewhere). */
-function screen(host) {
+/**
+ * A screen of tape static in the camcorder's viewfinder, put in `host` (or returned to be put somewhere). logo(canvas):
+ * draws the name over it and → a stop (the site's art.js drawLogo, as on the front page; none where a page has none).
+ * Whatever goes on it goes in `stack`, under the name.
+ */
+function screen(host, { logo } = {}) {
   style();
   const canvas = h('canvas.br-launch-static', { width: 192, height: 144, 'aria-hidden': 'true' });
-  const el = h('div.br-launch', canvas);
+  const name = logo ? h('canvas.br-launch-logo', { role: 'img', 'aria-label': 'BlockRooms' }) : null;
+  const stack = h('div.br-launch-stack', name);
+  const el = h('div.br-launch', canvas, h('div.br-launch-lines', { 'aria-hidden': 'true' }),
+    h('div.br-launch-frame', { 'aria-hidden': 'true' }, h('i'), h('i'), h('i'), h('i'), h('b')), stack);
   host?.append(el);
+  let stopLogo = null;
+  try { stopLogo = name ? logo(name) : null; } catch { name?.remove(); }
   // a small picture of noise, drawn a dozen times a second and stretched over the screen: next to nothing for the
   // machine to do while it is being measured behind it
   const ctx = canvas.getContext('2d'), w = canvas.width, ht = canvas.height;
@@ -104,22 +142,25 @@ function screen(host) {
   const timer = setInterval(draw, 80);
   let gone = false;
   return {
-    el,
+    el, stack,
     /** Fade out, and be gone. */
     async close() {
       if (gone) return; gone = true;
       el.classList.add('is-gone'); await pause(460);
-      clearInterval(timer); el.remove();
+      clearInterval(timer); if (typeof stopLogo === 'function') stopLogo(); el.remove();
     },
   };
 }
 
-/** The tiers to choose from: Auto first, then LAUNCH_TIERS. onPick(tier) once one is chosen. */
+let lists = 0;
+/** The tiers to choose from, under GRAPHICS (the owner: "so they know what low-high are for"): Auto first, then
+ * LAUNCH_TIERS. onPick(tier) once one is chosen. */
 function tierList(onPick) {
   const tiers = ['auto', ...LAUNCH_TIERS];
   const pick = h('span.br-launch-pick');
   const rows = tiers.map((tier) => h('button.br-launch-row', { type: 'button', dataset: { tier } }, LABEL[tier], tier === 'auto' ? pick : null));
-  const el = h('div.br-launch-list', { role: 'group' }, ...rows);
+  const head = h('div.br-launch-head', { id: 'br-launch-head-' + (++lists) }, 'GRAPHICS');
+  const el = h('div.br-launch-list', { role: 'group', 'aria-labelledby': head.id }, head, ...rows);
   let on = 0, chosen = false;
   const set = (i) => { on = (i + rows.length) % rows.length; rows.forEach((r, k) => r.classList.toggle('is-on', k === on)); rows[on].focus({ preventScroll: true }); };
   const choose = (i) => { if (chosen) return; chosen = true; set(i); onPick(tiers[i]); };
@@ -208,26 +249,26 @@ async function measureTiers(stage, setTier, { aim, stop }) {
 
 /**
  * The screen at first launch, over `host`, with the level measured behind it. office: the page's (its stage is drawn
- * with; its names borrowed) · enterBackrooms: index.js's. → { tier, auto, picked, results } once the choice is made, the
- * benchmark's visit is over and the setting is saved; the next visit is at that tier.
+ * with; its names borrowed) · enterBackrooms: index.js's · logo: as screen() takes it. → { tier, auto, picked,
+ * results } once the choice is made, the benchmark's visit is over and the setting is saved; the next visit is at that tier.
  */
-export async function firstLaunch({ office, enterBackrooms, host = document.body }) {
+export async function firstLaunch({ office, enterBackrooms, host = document.body, logo }) {
   const before = readRaw();
-  const s = screen(host);
+  const s = screen(host, { logo });
   let resolvePick; const picked = new Promise((r) => { resolvePick = r; });
   const list = tierList((tier) => resolvePick(tier));
-  s.el.append(list.el);
+  s.stack.append(list.el);
   list.auto(null);
   const release = hold(list, { all: true });
   const shown = pause(900).then(() => list.show());
 
-  // the visit behind the static: quiet, nobody following, no card, at High; gone as soon as it is not needed
+  // the visit behind the static: quiet, nobody following, no card, at the top tier; gone as soon as it is not needed
   let handle = null, choice = null, stopped = false;
   const stop = () => stopped || (choice !== null && choice !== 'auto');
   const quit = () => { stopped = true; if (handle && handle.state !== 'done') handle.finish('quit'); };
   const stage = office.stage;
   const visit = Promise.resolve().then(() => enterBackrooms({ stage, creations: office.creations || {}, net: office.net }, {
-    name: 'Employee', seed: BENCH.tape, mute: true, pursuer: false, scorecard: false, graphics: 'high',
+    name: 'Employee', seed: BENCH.tape, mute: true, pursuer: false, scorecard: false, graphics: BENCH_ORDER[0],
     onReady(h) { handle = h; if (stopped) h.finish('quit'); },
   })).catch((err) => { console.warn('[graphics] the benchmark could not be run', err); return null; });
   let over = false; visit.then(() => { over = true; });
@@ -273,14 +314,14 @@ export async function firstLaunch({ office, enterBackrooms, host = document.body
  * The screen again, from the menu's Settings, over the paused picture of the visit `handle` (index.js's), measured on
  * that picture. stage: the page's. The choice is the visit's Graphics setting at once. → the record, or null.
  */
-export async function retest({ stage, handle }) {
+export async function retest({ stage, handle, logo }) {
   if (!handle?.menu?.mount || !stage) return null;
   const was = handle.settings().graphics;
-  const s = screen(null);
+  const s = screen(null, { logo });
   handle.menu.mount(s.el);
   let resolvePick; const picked = new Promise((r) => { resolvePick = r; });
   const list = tierList((tier) => resolvePick(tier));
-  s.el.append(list.el);
+  s.stack.append(list.el);
   list.auto(null);
   const release = hold(list, { all: false });
   // (Esc: as it was, and back to the menu)
@@ -310,8 +351,8 @@ export async function retest({ stage, handle }) {
 /* ---- no picture at all --------------------------------------------------------------------------- */
 
 /** For a machine with neither WebGPU nor WebGL 2: the static, and that it cannot be played here. */
-export function cantRun(host = document.body) {
-  const s = screen(host);
-  s.el.append(h('div.br-launch-fault', { role: 'alert' }, h('strong', 'NO SIGNAL'), h('span', 'THIS MACHINE CAN’T RUN BLOCKROOMS')));
+export function cantRun(host = document.body, { logo } = {}) {
+  const s = screen(host, { logo });
+  s.stack.append(h('div.br-launch-fault', { role: 'alert' }, h('strong', 'NO SIGNAL'), h('span', 'THIS MACHINE CAN’T RUN BLOCKROOMS')));
   return s;
 }

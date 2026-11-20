@@ -42,14 +42,23 @@ stage cannot be opened.
 - **Settings offers it again:** a Test button beside Graphics. It is measured on the paused picture of the visit, and
   the choice applies at once.
 - **Classic** stays in Settings.
-- **No words** but the tiers' names and what Auto chose.
+- **The look** (the owner, 20 Nov: "it should say Graphics so they know what low-high are for", "a little more
+  thematic ... maybe also have our blockrooms logo up top"):
+  - the BlockRooms logo on top, drawn by the front page's own `art.js` `drawLogo` (the play page passes it in);
+  - under it, the camcorder's own menu: GRAPHICS over the tiers, in the tape's lettering (`hud.js`: bold Courier,
+    fringed red and blue), on a dark band of scan lines whose tracking slips now and then;
+  - round it, the viewfinder's corners and a blinking red recording dot, over the static;
+  - on a phone held sideways, the logo sits beside the menu.
+- **No words** but the logo, GRAPHICS, the tiers' names and what Auto chose.
 - **Not shown** for `?debug&bench=1`, or under `?debug` unless `&launch=1` asks for it, which shows it every time. The
   dev page shows it with `&launch=1`.
+- **Ultra**, once `graphics.js` has it (Gemini, `gemini/steam-webgpu-ultra`), is offered on the end and measured
+  first, with the benchmark's floor built at Ultra; nothing in the screen needs changing for it.
 - Each tier measured is logged to the console: `[graphics] high: median … ms, 9 in 10 under … ms, … fps`.
 
 Shots, on this container's software renderer, which picks Low (about 1 fps; it never lands in 20 s):
-`docs/webgpu/launch-measuring.jpg`, `launch-picked.jpg`, `launch-phone.jpg`, `launch-settings-test.jpg`,
-`launch-cant-run.jpg`. What Auto picks on real GPUs has not been seen yet; the owner's laptop is the first real check.
+`docs/webgpu/launch-measuring.jpg`, `launch-picked.jpg`, `launch-phone.jpg`, `launch-phone-side.jpg`,
+`launch-settings-test.jpg`, `launch-cant-run.jpg`, and the first version against this one in `launch-before-after.jpg`. What Auto picks on real GPUs has not been seen yet; the owner's laptop is the first real check.
 
 ## The switch
 

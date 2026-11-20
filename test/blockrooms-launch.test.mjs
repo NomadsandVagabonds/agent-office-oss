@@ -9,8 +9,10 @@ import { GRAPHICS } from '../public/world/backrooms/graphics.js';
 const steady = (ms, n = 120) => Array.from({ length: n }, () => ms);
 
 test('it offers Low, Medium and High after Auto, measures High first, and every tier is a Graphics setting', () => {
-  assert.deepEqual([...LAUNCH_TIERS], ['low', 'medium', 'high']);
-  assert.deepEqual([...BENCH_ORDER], ['high', 'medium']);
+  // (and Ultra, on the end and measured first, once graphics.js has it)
+  const ultra = GRAPHICS.includes('ultra') ? ['ultra'] : [];
+  assert.deepEqual([...LAUNCH_TIERS], ['low', 'medium', 'high', ...ultra]);
+  assert.deepEqual([...BENCH_ORDER], [...ultra, 'high', 'medium']);
   for (const t of [...LAUNCH_TIERS, ...BENCH_ORDER]) assert.ok(GRAPHICS.includes(t), t);
   assert.equal(LAUNCH_KEY, 'blockrooms:graphics');
   assert.ok(BENCH.settleS + BENCH.measureS <= 3, 'a few seconds a tier');
@@ -57,8 +59,10 @@ test('what is remembered is cleaned', () => {
 test('the play page asks before the first visit, offers it again from Settings, and says when nothing can draw', () => {
   const site = fs.readFileSync('tools/blockrooms/site.js', 'utf8');
   assert.match(site, /import\('\.\/world\/backrooms\/launch\.js'\)/);
-  assert.match(site, /launch\.graphicsAvailable\(\)\)\) \{ launch\.cantRun\(\); return; \}/);
-  assert.match(site, /launch\.shouldAsk\(\)\)\) await launch\.firstLaunch\(/);
+  assert.match(site, /launch\.graphicsAvailable\(\)\)\) \{ launch\.cantRun\(document\.body, \{ logo \}\); return; \}/);
+  // (the name over it, drawn as the front page draws it: art.js)
+  assert.match(site, /\{ drawLogo: logo \}\] = await Promise\.all\(/);
+  assert.match(site, /launch\.shouldAsk\(\)\)\) await launch\.firstLaunch\(\{ office, enterBackrooms, logo \}\)/);
   assert.match(site, /onGraphicsTest: \(handle\) => launch\.retest\(/);
   // (and the dev page imports it, which is also how the site's build finds it to stage)
   assert.match(fs.readFileSync('public/world/dev/backrooms.js', 'utf8'), /import\('\.\.\/backrooms\/launch\.js'\)/);
@@ -66,8 +70,8 @@ test('the play page asks before the first visit, offers it again from Settings, 
   assert.match(menu, /onGraphicsTest \? h\('button\.br-menu-test'/);
   assert.match(menu, /mount\(node\) \{ overlay\.append\(node\); \}/);
   assert.match(fs.readFileSync('public/world/backrooms/index.js', 'utf8'), /onGraphicsTest: opt\.onGraphicsTest && /);
-  // (no words on the screen but the tiers', what Auto chose, and the one for a machine that cannot draw)
+  // (no words on the screen but the logo, GRAPHICS, the tiers', what Auto chose, and the one for a machine that cannot draw)
   const launch = fs.readFileSync('public/world/backrooms/launch.js', 'utf8');
   const words = [...launch.matchAll(/h\('[^']*', (?:\{[^}]*\}, )?'([^']+)'/g)].map((m) => m[1]);
-  assert.deepEqual(words.sort(), ['NO SIGNAL', 'THIS MACHINE CAN\u2019T RUN BLOCKROOMS', '\u25AE\u25AE\u25AE'].sort());   // (the last: Auto measuring)
+  assert.deepEqual(words.sort(), ['GRAPHICS', 'NO SIGNAL', 'THIS MACHINE CAN\u2019T RUN BLOCKROOMS', '\u25AE\u25AE\u25AE'].sort());   // (the last: Auto measuring)
 });
