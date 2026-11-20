@@ -91,12 +91,13 @@ function photo(c) {
   c.crate(0, zBack, Math.min(dw - 0.3, p.back * 0.66 + 0.2), 0.42, 0.42, 0, [0.42, 0.3, 0.2], { tall: false });
   let n = 0;
   const who = () => cast[p.who[n++ % p.who.length] % cast.length];
-  for (let i = 0; i < p.back; i++) { const w = who(), x = (i - (p.back - 1) / 2) * 0.66; people.push(standee(c, 'who:' + w.name, w.look, x, zBack, 0, { watch: false, y: 0.42, name: w.name })); }
+  // Stagger adjacent standees slightly in Z so overlapping cardboard borders never coplanar Z-fight
+  for (let i = 0; i < p.back; i++) { const w = who(), x = (i - (p.back - 1) / 2) * 0.66, z = zBack + (i % 2 ? 0.024 : -0.024); people.push(standee(c, 'who:' + w.name, w.look, x, z, 0, { watch: false, y: 0.42, name: w.name })); }
   const gap = Math.floor(p.front / 2);
   for (let i = 0; i <= p.front; i++) {
-    const x = (i - p.front / 2) * 0.68;
+    const x = (i - p.front / 2) * 0.68, z = zFront + (i % 2 ? 0.032 : -0.032);
     if (i === gap) continue;
-    const w = who(); people.push(standee(c, 'who:' + w.name, w.look, x, zFront, 0, { watch: false, name: w.name }));
+    const w = who(); people.push(standee(c, 'who:' + w.name, w.look, x, z, 0, { watch: false, name: w.name }));
     c.reserve(x, zFront, 0.3);
   }
   // your place: a cross of tape and your name

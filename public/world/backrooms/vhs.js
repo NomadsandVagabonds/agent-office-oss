@@ -84,6 +84,14 @@ const Signal = {
       g = mix(vec3(dot(g, vec3(0.299, 0.587, 0.114))), g, uSat);
       return mix(c, g, uGrade);
     }
+    vec3 seeRaw(vec2 uv) {
+      vec2 at = clamp(uv, 0.001, 0.999);
+      vec3 c = texture2D(tDiffuse, at).rgb;
+      if (uHaze > 0.0) c = haze(c, at);
+      c = pow(film(c), vec3(0.4545));
+      if (uGrade > 0.0) c = grade(c);
+      return c;
+    }
     vec3 see(vec2 uv) {
       vec2 at = clamp(uv, 0.001, 0.999);
       vec3 c = sampleOptical(at);
@@ -115,12 +123,13 @@ const Signal = {
       vec2 iq = q0.yz;
       if (uSoft > 0.001) {
         // luma: soft; chroma: softer, and late — it lands to the right of where it belongs
-        y = q0.x * 0.5 + 0.25 * (dot(see(uv + vec2(px * 1.25, 0.0)), vec3(0.299, 0.587, 0.114)) + dot(see(uv - vec2(px * 1.25, 0.0)), vec3(0.299, 0.587, 0.114)));
+        // (side taps stay single-tap while c0 carries the optical lens bokeh: 15 taps total instead of 63)
+        y = q0.x * 0.5 + 0.25 * (dot(seeRaw(uv + vec2(px * 1.25, 0.0)), vec3(0.299, 0.587, 0.114)) + dot(seeRaw(uv - vec2(px * 1.25, 0.0)), vec3(0.299, 0.587, 0.114)));
         iq = q0.yz * 0.26;
-        iq += (YIQ * see(uv - vec2(px * 2.5, 0.0))).yz * 0.28;
-        iq += (YIQ * see(uv - vec2(px * 5.0, 0.0))).yz * 0.22;
-        iq += (YIQ * see(uv - vec2(px * 7.5, 0.0))).yz * 0.15;
-        iq += (YIQ * see(uv - vec2(px * 10.5, 0.0))).yz * 0.09;
+        iq += (YIQ * seeRaw(uv - vec2(px * 2.5, 0.0))).yz * 0.28;
+        iq += (YIQ * seeRaw(uv - vec2(px * 5.0, 0.0))).yz * 0.22;
+        iq += (YIQ * seeRaw(uv - vec2(px * 7.5, 0.0))).yz * 0.15;
+        iq += (YIQ * seeRaw(uv - vec2(px * 10.5, 0.0))).yz * 0.09;
         iq *= 1.0 + 0.16 * uSoft;
       }
       // noise: fine in the brightness, coarse in the colour, both worse when the gain is up

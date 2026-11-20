@@ -149,5 +149,15 @@ export function createBeamShadows(renderer) {
     return stats;
   }
 
-  return { draw, uniforms, stats, get size() { return size; }, get patched() { return patched.size; }, dispose: off };
+  /** Pre-patch receiving surfaces during floor build so crossing doorways never stalls with mid-walk shader rebuilds. */
+  function warm(res, scene) {
+    res = beamShadowSize(res);
+    if (!res || !scene) return;
+    if (size !== res) make(res);
+    scene.traverse((o) => {
+      if (o.isMesh && receivesBeamShadow(o) && !patched.has(o.material)) patch(o.material);
+    });
+  }
+
+  return { draw, warm, uniforms, stats, get size() { return size; }, get patched() { return patched.size; }, dispose: off };
 }

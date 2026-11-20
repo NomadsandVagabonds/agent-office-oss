@@ -117,6 +117,13 @@ export function createVhsNode(renderer, camera, opt = {}) {
       const g = mix(vec3(luma(g0)), g0, U.uSat);
       return mix(c, g, U.uGrade);
     };
+    const seeRaw = (p) => {
+      const q = clamp(p, 0.001, 0.999);
+      let c = at(srcTex, q).rgb;
+      if (withDepth) c = select(U.uHaze.greaterThan(0), haze(c, q), c);
+      c = pow(film(c), vec3(0.4545));
+      return select(U.uGrade.greaterThan(0), grade(c), c);
+    };
     const see = (p) => {
       const q = clamp(p, 0.001, 0.999);
       let c = sampleOptical(q);
@@ -144,13 +151,13 @@ export function createVhsNode(renderer, camera, opt = {}) {
       const y = luma(c0).toVar();
       const iq = toIQ(c0).toVar();
       If(U.uSoft.greaterThan(0.001), () => {
-        y.assign(luma(c0).mul(0.5).add(luma(see(p.add(side(1.25)))).add(luma(see(p.sub(side(1.25))))).mul(0.25)));
+        y.assign(luma(c0).mul(0.5).add(luma(seeRaw(p.add(side(1.25)))).add(luma(seeRaw(p.sub(side(1.25))))).mul(0.25)));
         iq.assign(
           toIQ(c0).mul(0.26)
-            .add(toIQ(see(p.sub(side(2.5)))).mul(0.28))
-            .add(toIQ(see(p.sub(side(5.0)))).mul(0.22))
-            .add(toIQ(see(p.sub(side(7.5)))).mul(0.15))
-            .add(toIQ(see(p.sub(side(10.5)))).mul(0.09))
+            .add(toIQ(seeRaw(p.sub(side(2.5)))).mul(0.28))
+            .add(toIQ(seeRaw(p.sub(side(5.0)))).mul(0.22))
+            .add(toIQ(seeRaw(p.sub(side(7.5)))).mul(0.15))
+            .add(toIQ(seeRaw(p.sub(side(10.5)))).mul(0.09))
             .mul(U.uSoft.mul(0.16).add(1))
         );
       });
@@ -299,6 +306,22 @@ export function createVhsNode(renderer, camera, opt = {}) {
     nodes: true,
     setAmbient(light) { u.uHazeLight.value = Math.max(0, light) * HAZE_LIGHT; },
     setScene(next) { scene = next; },
+    /** Pre-compile WebGPU pipelines for `targetScene` into the live sceneTarget + glowMRT layout so crossing doorways never stalls. */
+    async warm(targetScene) {
+      if (!targetScene || typeof renderer.compileAsync !== 'function') return;
+      renderer.setRenderTarget(sceneTarget);
+      if (glowOn) {
+        renderer.setMRT(glowMRT);
+        glowPass.on = true;
+      }
+      try {
+        await renderer.compileAsync(targetScene, camera);
+      } catch { /* ignore if device lost or backend not initialized yet */ } finally {
+        glowPass.on = false;
+        renderer.setMRT(null);
+        renderer.setRenderTarget(null);
+      }
+    },
     render(dt) {
       time += dt; u.uTime.value = time; u.uNear.value = camera.near; u.uFar.value = camera.far;
       copy(u, node); copy(s, screenNode);

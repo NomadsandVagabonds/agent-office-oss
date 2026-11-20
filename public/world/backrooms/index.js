@@ -468,6 +468,14 @@ async function visit(office, opt) {
       env.grip = createFurnitureGrip(f.world, env.barricades, { sound });
     }
     inventory?.hang(env);
+    // Pre-patch beam shadows & asynchronously warm WebGPU pipelines during load static so sprinting across doorways never hitches
+    if (gfx().beamShadows > 0) beamShadows.warm?.(gfx().beamShadows, f.world.scene);
+    if (!pace && vhs.warm) {
+      const prevVis = f.world.rooms.map((r) => r.group.visible);
+      for (const r of f.world.rooms) r.group.visible = true;
+      await vhs.warm(f.world.scene);
+      f.world.rooms.forEach((r, i) => { r.group.visible = prevVis[i]; });
+    }
     return f;
   }
   /** The part below this one, built while somebody is still finding their way to it: a room, then a breath, then a room. */

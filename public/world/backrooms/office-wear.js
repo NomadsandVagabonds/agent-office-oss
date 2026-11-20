@@ -548,6 +548,8 @@ function placeCeilVox(c, geo, x, y, z, { scale = HALF_VOX, rot = 0, tiltX = 0, t
 }
 
 function attachToRoom(c, obj) {
+  // Flat surface wear & tiny droplets never cast flashlight beam shadows
+  if (obj?.userData) obj.userData.noBeamShadow = true;
   if (c.rt?.group) c.rt.group.add(obj);
   else if (typeof c.add === 'function') c.add(obj);
 }
