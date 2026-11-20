@@ -264,7 +264,7 @@ async function visit(office, opt) {
       `room ${at.room || '?'} #${at.id ?? '?'} at ${at.x ?? '?'}, ${at.z ?? '?'} facing ${at.yaw ?? '?'}`, `${Math.floor(tally?.report?.()?.seconds ?? 0)} s on tape`].join(' · ');
   };
   menu = createMenu({ host: hud.el, settings: { ...settings, scoreEligible: difficulty.report().ranked }, furniture: opt.barricades !== false, graphics: true, onRequestOpen: () => setPaused(true), onResume: resume,
-    onArchive: opt.onArchive, onGiveUp() { gaveUp = true; finish('quit'); }, onChange: changeSetting,
+    onArchive: opt.onArchive, onGiveUp() { gaveUp = true; finish('quit'); }, onChange: changeSetting, onGraphicsTest: opt.onGraphicsTest && (() => { try { opt.onGraphicsTest(handle); } catch { /* (not before the first floor is down) */ } }),
     ...(opt.debug ? { tape: () => String(seed), onReport: async () => { try { await navigator.clipboard.writeText(devReport()); return true; } catch { return false; } } } : {}) });
   // Six pockets, four hearts, and a camcorder battery that runs down (inventory.js, survival.js): the visit's, not any
   // one part's. `opt.inventory === false` for a visit without them, as it was before there were any.

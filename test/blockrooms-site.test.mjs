@@ -56,8 +56,8 @@ test('the site is two whole pages with everything they ask for beside them, and 
   for (const f of preloads) assert.ok(files.includes(f), `asked for at once, and not there: ${f}`);
   // (the measuring tape, for ?debug&bench=1, is there to be imported when asked for, and is not asked for at once)
   for (const f of PERF) assert.ok(files.includes(f) && !preloads.includes(f), `${f} is not there, or is preloaded`);
-  // (and the WebGPU build, for ?gpu=webgpu: there to be imported by the stage when asked for, never fetched otherwise)
-  assert.ok(files.includes('vendor/three.webgpu.min.js') && !preloads.includes('vendor/three.webgpu.min.js'), 'the WebGPU build is not there, or is preloaded');
+  // (and the WebGPU build, which every visit draws with now: there, and asked for at once)
+  assert.ok(files.includes('vendor/three.webgpu.min.js') && preloads.includes('vendor/three.webgpu.min.js'), 'the WebGPU build is not there, or is not preloaded');
   for (const f of files.filter((n) => /\.m?js$/.test(n))) {
     const src = fs.readFileSync(path.join(out, f), 'utf8');
     // (less its block comments: three.js's add-ons show how to import them in theirs, by a name only a bundler knows)

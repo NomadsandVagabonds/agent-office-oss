@@ -170,6 +170,7 @@ test('the Graphics row is offered to everybody, and starts at Classic', async ()
   assert.equal(cleanBackroomsSettings({}).graphics, 'classic', 'nobody is moved off the picture they had');
   const menu = read('menu.js');
   assert.match(menu, /graphics: offerGraphics = true,/, 'offered unless told not to (the dev page, the tests)');
-  assert.match(menu, /if \(offerGraphics\) settingsPage\.append\(h\('div\.br-menu-setting', h\('label', \{ htmlFor: graphics\.id \}, 'Graphics'\), graphics\)\);/);
+  // (with the graphics screen's Test beside it where the page offers one: launch.js)
+  assert.match(menu, /if \(offerGraphics\) settingsPage\.append\(h\('div\.br-menu-setting', h\('label', \{ htmlFor: graphics\.id \}, 'Graphics'\), graphics, graphicsTest\)\);/);
   assert.match(menu, /fields\.set\('graphics', \{ input: graphics \}\);/, 'and kept and obeyed either way');
 });

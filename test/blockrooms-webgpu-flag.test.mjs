@@ -1,5 +1,5 @@
-// The WebGPU switch (engine/gpu.js, docs/BLOCKROOMS-WEBGPU.md): off unless asked for, by the address or a shell's
-// stored choice; nothing of the WebGPU build is fetched or preloaded on the default path.
+// The renderer switch (engine/gpu.js, docs/BLOCKROOMS-WEBGPU.md): WebGPU for everybody since the owner's word of 20 Nov,
+// WebGL when the address or a shell's stored choice asks for it (the escape hatch).
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -7,15 +7,16 @@ import { rendererChoice, RENDERERS, DEFAULT_RENDERER, gpu } from '../public/worl
 
 const q = (s) => new URLSearchParams(s);
 
-test('the renderer is WebGL unless WebGPU is asked for', () => {
-  assert.equal(DEFAULT_RENDERER, 'webgl');
+test('the renderer is WebGPU unless WebGL is asked for', () => {
+  assert.equal(DEFAULT_RENDERER, 'webgpu');
   assert.deepEqual([...RENDERERS], ['webgl', 'webgpu']);
-  assert.equal(rendererChoice(q(''), null), 'webgl');
-  assert.equal(rendererChoice(null, undefined), 'webgl');
-  assert.equal(rendererChoice(q('gpu=webgpu'), null), 'webgpu');
-  assert.equal(rendererChoice(q(''), 'webgpu'), 'webgpu');                  // (a shell's stored choice)
-  assert.equal(rendererChoice(q('gpu=webgl'), 'webgpu'), 'webgl');           // (the address wins)
-  for (const odd of ['1', 'WEBGPU', 'vulkan', '']) assert.equal(rendererChoice(q(`gpu=${odd}`), 'nonsense'), 'webgl');
+  assert.equal(rendererChoice(q(''), null), 'webgpu');
+  assert.equal(rendererChoice(null, undefined), 'webgpu');
+  assert.equal(rendererChoice(q('gpu=webgl'), null), 'webgl');              // (the escape hatch)
+  assert.equal(rendererChoice(q(''), 'webgl'), 'webgl');                    // (a shell's stored choice)
+  assert.equal(rendererChoice(q('gpu=webgpu'), 'webgl'), 'webgpu');         // (the address wins)
+  assert.equal(rendererChoice(q('gpu=webgl'), 'webgpu'), 'webgl');
+  for (const odd of ['1', 'WEBGL', 'vulkan', '']) assert.equal(rendererChoice(q(`gpu=${odd}`), 'nonsense'), 'webgpu');
   assert.equal(gpu.nodes, null, 'nothing has switched it on');
 });
 

@@ -121,7 +121,8 @@ export function build(out, opt = {}) {
 
   // the modules the level needs before it can show anything, asked for all at once (rooms that live in files of their
   // own are fetched when a building has them, and are not in this list)
-  const first = ['site.js', 'vendor/three.module.min.js', 'vendor/three.core.min.js', ...files.filter((f) => f.startsWith('vendor/three-addons/')), ...eager.filter((f) => !f.startsWith('world/dev/'))];
+  // (and the WebGPU build, which the stage imports for every visit since WebGPU became the renderer, 20 Nov: engine/gpu.js)
+  const first = ['site.js', 'vendor/three.module.min.js', 'vendor/three.core.min.js', 'vendor/three.webgpu.min.js', ...files.filter((f) => f.startsWith('vendor/three-addons/')), ...eager.filter((f) => !f.startsWith('world/dev/'))];
   const preload = first.map((f) => `<link rel="modulepreload" href="./${f}">`).join('\n');
   const og = (at) => [
     origin && `<meta property="og:url" content="${origin}/${at}">`,
