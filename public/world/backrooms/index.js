@@ -340,6 +340,7 @@ async function visit(office, opt) {
       const { prepareFurnitureStudy } = await import('./furniture-study.js');
       prepareFurnitureStudy(level, builders);
     }
+    if (opt.debug && level === first) opt.dev?.prepareRoom?.(level, builders);
     if (opt.dev?.bridgeStudy && level === first) {
       const { prepareBridgeStudy } = await import('./bridge-study.js');
       prepareBridgeStudy(level, builders);

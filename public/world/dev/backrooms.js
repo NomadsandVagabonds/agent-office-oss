@@ -9,6 +9,7 @@
 //                      way onto a kind that is still being built (`dealt: false`), which is in nobody's visit
 //   &vhs=0|1|2         clean · steady · full camcorder           &mute=1
 //   &graphics=classic|low|medium|high|auto   the Graphics setting (graphics.js), over the saved one
+//   &chairstudy=1      first-person copier fixture (seed=7): X to scan and paste, E to carry, B for frame times
 //   &barricades=0      without furniture that can be dragged (it is on unless turned off); &study=1 puts a review set by the landing (seed=7)
 //   &lighting=1        fluorescent-bank prototype (off by default); &lighting=dim|failing|travel|emergency|islands forces that treatment in eligible plain rooms
 //   &hallstudy=1       rehearsal controls for the last-light room (use &only=last-light)
@@ -151,6 +152,8 @@ const only = (q.get('only') || '').split(',').filter(Boolean);
 if (q.get('preview')) (await import('../backrooms/preview-deck.js')).enlist(q.get('preview').split(','));
 if (room && DECK.some((a) => a.id === room) && !only.includes(room)) only.unshift(room);
 
+const chairLab = q.get('chairstudy') === '1' ? await import('./chair-copy/study.js') : null;
+
 async function go() {
   let closeStudy;
   delete window.__backroomsResult;
@@ -164,6 +167,7 @@ async function go() {
     debug: true, scorecard: q.get('card') !== '0', home: { label: 'Return to homepage' }, where: q.get('where') || undefined,
     inventory: q.get('inventory') !== '0', barricades: q.get('barricades') !== '0',
     dev: { supplies: q.get('supplies') === '1', cast: (q.get('cast') || '').split(',').filter(Boolean), beside: q.get('beside') || null, wake: q.get('wake') === '1', barricadeStudy: q.get('barricades') === '1' && q.get('study') === '1',
+      prepareRoom: chairLab?.prepareRoom,
       bridgeStudy: q.get('bridgestudy') === '1',
       // &gfx=contact,bounce (each at 1) or &gfx=contact:0.6,bounce:0.5: contact darkening and bounced colour, baked with each room (kit.js gfxOf);
       // &gfx=shadows: the tubes' shadows in each room's light map (shadowmap.js)
@@ -182,7 +186,8 @@ async function go() {
       console.log(handle.sketch());
       if (q.get('check')) console.log('[check] ' + JSON.stringify(check(handle)));
       perf?.attach(handle);
-      if (q.get('divestudy') === '1') closeStudy = diveStudy(handle);
+      if (chairLab) closeStudy = chairLab.attachStudy(handle, stage);
+      else if (q.get('divestudy') === '1') closeStudy = diveStudy(handle);
       else if (q.get('showerstudy') === '1') closeStudy = showerStudy(handle);
       else if (q.get('channelstudy') === '1') closeStudy = channelStudy(handle);
       else if (q.get('finishstudy') === '1') closeStudy = poolFinishStudy(handle);
