@@ -4,6 +4,7 @@ import { CRAFTING_TUNING, previewCraft } from './crafting.js';
 import { EXTINGUISHER } from './extinguisher.rule.js';
 
 export const ITEM_DEFS = Object.freeze({
+  'carbon-camera': Object.freeze({ name: 'Carbon Camera', description: 'Hold click or X to look through the finder. Press E to copy an object. Aim at clear floor and press E to paste.', useLabel: 'How to aim', maxCharge: CRAFTING_TUNING.copierCharge }),
   torch: Object.freeze({ name: 'Flashlight', description: 'A worn hand torch. Its narrow beam reaches into the unlit corners.', useLabel: 'Switch on', maxCharge: CRAFTING_TUNING.torchCharge }),
   battery: Object.freeze({ name: 'Battery pack', description: 'A pair of heavy cells wrapped together. Fits the camera or flashlight.', useLabel: 'Fit batteries' }),
   chalk: Object.freeze({ name: 'Chalk', description: 'A short piece of white chalk. Leave a mark to recognize a place again.', useLabel: 'Mark floor', maxUses: 6 }),
@@ -46,6 +47,10 @@ export function makeItem(type, id, overrides = {}) {
     const prepared = overrides.prepared === undefined ? false : overrides.prepared;
     if (typeof prepared !== 'boolean') throw new TypeError('Invalid flashlight preparation.');
     item.prepared = prepared;
+  } else if (type === 'carbon-camera') {
+    const charge = overrides.charge ?? definition.maxCharge;
+    if (!Number.isInteger(charge) || charge < 0 || charge > definition.maxCharge) throw new RangeError('Invalid copier charge.');
+    item.charge = charge;
   } else if (type === 'extinguisher') {
     const charge = overrides.charge ?? definition.maxCharge;
     if (!Number.isFinite(charge) || charge < 0 || charge > definition.maxCharge) throw new RangeError('Invalid extinguisher charge.');
@@ -268,9 +273,10 @@ export function createInventory({
     if (crafting) return fail('busy');
     if (!slotNumber(fromIndex, size) || !slotNumber(toIndex, size)) return fail('invalid-slot');
     const source = slots[fromIndex], target = slots[toIndex];
-    if (fromIndex === toIndex || source?.type !== 'battery' || target?.type !== 'torch') return fail('incompatible');
-    if (target.charge >= ITEM_DEFS.torch.maxCharge) return fail('full-charge');
-    target.charge = ITEM_DEFS.torch.maxCharge;
+    if (fromIndex === toIndex || source?.type !== 'battery' || !['torch', 'carbon-camera'].includes(target?.type)) return fail('incompatible');
+    const capacity = ITEM_DEFS[target.type].maxCharge;
+    if (target.charge >= capacity) return fail('full-charge');
+    target.charge = capacity;
     slots[fromIndex] = null;
     if (selected === fromIndex) selected = toIndex;
     revision++;
@@ -288,15 +294,16 @@ export function createInventory({
     });
     if (!plan.ok) return plan;
     const of = type => plan.inputs.find(input => input.type === type);
-    if (plan.recipe === 'torch-battery') {
-      if (of('torch').ref.device === 'mounted-torch') {
+    if (plan.recipe === 'torch-battery' || plan.recipe === 'copier-battery') {
+      const target = of(plan.recipe === 'copier-battery' ? 'carbon-camera' : 'torch');
+      if (target.ref.device === 'mounted-torch') {
         const source = of('battery');
         mountedTorch.charge = ITEM_DEFS.torch.maxCharge;
         slots[source.ref.slot] = null; revision++;
         return { ok: true, recipe: plan.recipe, action: 'recharge', index: null, item: copy(mountedTorch),
           consumed: [copy(source.item)], result: { item: copy(mountedTorch) } };
       }
-      const result = combine(of('battery').ref.slot, of('torch').ref.slot);
+      const result = combine(of('battery').ref.slot, target.ref.slot);
       return { ...result, recipe: plan.recipe, consumed: [copy(result.consumed)], result: { item: copy(result.item) } };
     }
     if (plan.recipe === 'tape-torch') {
@@ -384,13 +391,20 @@ export function createInventory({
     revision++;
     return { ok: true, charge: used.charge, empty, item: used, index };
   }
+  function spendPrint(id) {
+    const item = slots[selected];
+    if (crafting || holstered || item?.type !== 'carbon-camera' || item.id !== id || item.charge < 1) return false;
+    item.charge--;
+    revision++;
+    return true;
+  }
   function clear() {
     if (crafting) return;
     if (!slots.some(Boolean) && selected === 0 && !holstered && activeTorch === null && mountedTorch === null) return;
     slots.fill(null); selected = 0; holstered = false; activeTorch = null; mountedTorch = null; revision++;
   }
   return {
-    add, remove, select, useSelected, consumeSelected, combine, craft, mount, toggleLight, torchPower, tick, spray, clear, read,
+    add, remove, select, useSelected, consumeSelected, combine, craft, mount, toggleLight, torchPower, tick, spray, spendPrint, clear, read,
     torchMounted: () => !!mountedTorch && activeTorch === mountedTorch.id,
   };
 }

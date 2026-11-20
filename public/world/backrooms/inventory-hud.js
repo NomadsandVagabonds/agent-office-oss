@@ -28,6 +28,11 @@ function fallbackItemIcon(type, item) {
     poly('14,18 16,16 19,19 17,21', '#403e30');
     rect(7,22,2,2,'#c6b98e');
     if (item?.prepared) { poly('9,19 12,16 18,22 15,25', '#9c9e8b'); poly('10,19 12,17 17,22 15,24', '#d1cfb3'); }
+  } else if (type === 'carbon-camera') {
+    rect(9,2,14,9,'#302d30'); rect(11,4,10,5,'#acaf96');
+    poly('6,13 11,10 24,10 29,22 28,28 3,28 3,22','#e5cf9f');
+    poly('6,22 11,14 18,15 17,23','#363239'); rect(11,19,8,7,'#d1bc91');
+    rect(13,21,4,3,'#28282c'); rect(18,11,5,2,'#e56c50');
   } else if (type === 'battery') {
     for (const x of [5, 17]) {
       rect(x + 2,2,4,3,'#bdc5b4'); rect(x + 2,2,4,1,'#e9e7ce');
@@ -248,7 +253,7 @@ export function createInventoryHud({ size = 6, host, onSelect, onUse, onDrop, on
   const blocked = () => !!snapshot.health?.dead || !!snapshot.camera?.depleted;
   const snackCap = () => snapshot.maxSnackHealth ?? snapshot.health?.max ?? 4;
   const canEat = () => !blocked() && !!snapshot.health && snapshot.health.current > 0 && snapshot.health.current < Math.min(snapshot.health.max, snackCap());
-  const craftIngredient = item => !!item && ['battery', 'torch', 'paper', 'lighter', 'tape'].includes(item.type);
+  const craftIngredient = item => !!item && ['battery', 'torch', 'carbon-camera', 'paper', 'lighter', 'tape'].includes(item.type);
   const refEquals = (a, b) => !!a && !!b && (a.device ? a.device === b.device && a.id === b.id : a.slot === b.slot && a.id === b.id);
   const iconKey = item => item ? `${item.type}:${!!item.prepared}` : null;
   const isLit = item => !!item && item.charge > 0 && item.id === snapshot.activeTorch
@@ -272,6 +277,7 @@ export function createInventoryHud({ size = 6, host, onSelect, onUse, onDrop, on
     return previewCraft(snapshot, refs, { paperCount }).ok;
   }
   function conditionOf(item) {
+    if (item?.type === 'carbon-camera') return `${item.charge} of ${ITEM_DEFS['carbon-camera'].maxCharge} charges`;
     if (item?.type === 'torch') return `${item.id === snapshot.mountedTorch?.id ? 'Mounted · ' : item.prepared ? 'Tape fitted · ' : ''}${percent(item)}% charge · ${isLit(item) ? 'on' : 'off'}`;
     if (item?.type === 'chalk') return `${item.uses} mark${item.uses === 1 ? '' : 's'} left`;
     if (item?.type === 'scissors') return 'Stiff at the pivot';

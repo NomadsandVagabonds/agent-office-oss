@@ -8,7 +8,7 @@ import { makeItem, ITEM_DEFS } from './inventory-state.js';
 import { createInventoryFire, FIRE } from './inventory-fire.js';
 
 const REACH = 1.35, MARK_R = .33, MAX_MARKS = 24;
-const ITEM_RADIUS = Object.freeze({ torch: .30, battery: .19, chalk: .16, paper: .31, 'pink-slip': .28, scissors: .29, snack: .23, balloon: .26, lighter: .20, tape: .26, opener: .2, extinguisher: .2, flamingo: .3 });
+const ITEM_RADIUS = Object.freeze({ torch: .30, battery: .19, chalk: .16, paper: .31, 'pink-slip': .28, scissors: .29, snack: .23, balloon: .26, lighter: .20, tape: .26, opener: .2, extinguisher: .2, flamingo: .3, 'carbon-camera': .22 });
 const ITEM_HEIGHT = Object.freeze({ balloon: 1.4, flamingo: .85 });
 const copy = item => ({ ...item });
 /**
@@ -215,6 +215,14 @@ export function createInventoryWorld(env, model, { canAct = () => true, onNotice
     return result;
   }
   return {
+    forEachNearbyPickup(x,z,reach,visit) {
+      for(const e of entries.values())if(e.active&&Math.hypot(e.wx-x,e.wz-z)<=reach)visit(e.item,e.mesh);
+    },
+    takePickupAway(id,key) {
+      const e=entries.get(id);
+      if(!e?.active)return false;
+      e.active=false;e.away=key;e.mesh.visible=false;return true;
+    },
     spawn, dropSelected, dropSpot: item => groundSpot(ITEM_RADIUS[item.type], false, ITEM_HEIGHT[item.type]), canMark: () => !disposed && !!groundSpot(MARK_R, true), mark, ignite,
     fire: Object.freeze({ threatAt: fires.threatAt, burning: fires.report, douse: fires.douse }),
     // A co-op spectator renders only effects accepted by the authority.

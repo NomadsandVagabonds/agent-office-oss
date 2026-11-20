@@ -2,6 +2,8 @@
 // Authored in 2.5 cm unit coordinates (scale = kit.VOXEL = 0.025 m on the floor)
 // with real curves, bevels, negative space, and propped silhouettes.
 
+import { sculptCarbonCamera, sculptCarbonGrip } from './carbon-camera.model.js';
+
 const DEG = Math.PI / 180, TAU = Math.PI * 2;
 const COLOR_CACHE = new Map();
 
@@ -1261,12 +1263,14 @@ export const lighter = makeEntry(sculptLighter);
 export const tape = makeEntry(sculptTape);
 export const opener = makeEntry(sculptOpener);
 export const camcorder = makeEntry(sculptCamcorder);
+export const carbonGrip = makeEntry(sculptCarbonGrip);
 export const extinguisher = makeEntry(sculptExtinguisher);
 export const flamingo = makeEntry(sculptFlamingo);
 
 torch.grip = sculptTorchGrip;
 
 export const INVENTORY_MODELS = Object.freeze({
+  'carbon-camera': makeEntry(sculptCarbonCamera),
   torch,
   battery,
   chalk,

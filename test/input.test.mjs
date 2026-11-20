@@ -26,7 +26,7 @@ function setup(t, extra = {}) {
   const ui = { blocked:false, intercept:() => false };
   const hud = { use:{}, leave:{}, setTouch() {}, ...(extra.hud || {}) };
   const input = createInput({ canvas, hud, stage:{ size:{ w:1000, h:800 } }, sound:{ start:() => calls.sound++ },
-    owns:target => target === button, blocked:() => ui.blocked, interceptKey:event => ui.intercept(event), light:extra.light,
+    owns:target => target === button, blocked:() => ui.blocked, interceptKey:event => ui.intercept(event), light:extra.light, raiseView:extra.raiseView, lowerView:extra.lowerView,
     key:key => calls.keys.push(key), use:() => calls.use++, menu:() => calls.menu++, click:() => calls.click++, smash:() => calls.smash = (calls.smash || 0) + 1, wheel:step => calls.wheels.push(step) });
   t.after(() => {
     input.dispose();
@@ -306,4 +306,25 @@ test("the right button while looking is the smash (what is in the hand's other u
   assert.equal(h.calls.smash, 1); assert.equal(h.calls.click, 0); assert.equal(h.input.state.firing, false);
   h.document.pointerLockElement = null;
   h.window.emit('pointerdown', { target:h.canvas, button:2 }); assert.equal(h.calls.smash, 1, 'not before the mouse is held');
+});
+
+
+test('holding the finder leaves E usable and lowering never fires a shutter', t => {
+  let ends=0;
+  const h=setup(t,{raiseView:()=>true,lowerView:()=>ends++});
+  h.window.emit('pointerdown',{target:h.canvas});
+  h.window.emit('keydown',{key:'e'}); h.window.emit('keydown',{key:'e',repeat:true});
+  h.window.emit('keyup',{key:'e'});
+  assert.equal(h.calls.use,1);
+  h.window.emit('pointerup',{target:h.canvas});
+  assert.equal(ends,1);
+  h.window.emit('pointerdown',{target:h.canvas});
+  h.window.emit('pointercancel',{target:h.canvas});
+  h.window.emit('pointerup',{target:h.canvas});
+  h.window.emit('pointerdown',{target:h.canvas});
+  h.window.emit('blur');
+  h.window.emit('pointerup',{target:h.canvas});
+  assert.equal(ends,3);
+  assert.equal(h.calls.use,1);
+  assert.equal(h.calls.click,0);
 });

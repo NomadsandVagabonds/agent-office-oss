@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#1a211c"><title>Carbon Copy · BlockRooms</title>
+<link rel="stylesheet" href="style.css"><script type="importmap">{"imports":{"three":"../../../vendor/three.module.min.js"}}</script></head>
+<body><main>
+<header><div class="mast"><span class="brandmark" aria-hidden="true">▧</span> BLOCKROOMS <span class="slash">/</span> <span>REPROGRAPHICS</span></div><button id="sound" aria-pressed="false">Sound off</button></header>
+<section class="heading"><div><h1>Carbon Copy<span>.</span></h1><p>Open the returns shutter. Give the scale weight and the receiver a ring.</p></div><button id="reset" class="reset">↺ &nbsp;Reset room</button></section>
+<div class="console"><section class="monitor" aria-label="Returns office">
+<div class="camera"><span><i></i> RETURNS OFFICE</span><span>CAM 04</span></div>
+<div id="view"><canvas id="scene" aria-label="Interactive voxel room. Click a donor or output pad to select it. All actions are also available on the console."></canvas><p id="rendererFail" hidden>3D could not start. Enable hardware acceleration or try a WebGL 2 browser.</p>
+<div id="worldlabels" aria-hidden="true"></div></div>
+<div class="interlocks"><span class="flabel">INTERLOCKS</span><span id="weight" class="lamp">Scale</span><span id="audio" class="lamp">Receiver</span><span id="gate">Shutter locked</span></div></section>
+<aside aria-label="Copier console"><div class="strip">REPROGRAPHICS <b>CC–04</b></div>
+<form id="controls">
+<label class="section-label" for="object"><em>01</em> Shape to copy</label><div class="entry"><input id="object" value="rubber duck" maxlength="96" autocomplete="off" spellcheck="false"></div>
+<div class="examples"><button type="button" data-example="rubber duck">Duck</button><button type="button" data-example="chair with a lamp">Chair + lamp</button><button type="button" id="scan">Scan donor</button></div>
+<details id="more"><summary>Object catalog &amp; AI</summary><p id="catalog"></p><p id="aiStatus">Checking on-device AI…</p></details>
+<fieldset><legend class="section-label"><em>02</em> Feedstock</legend><div id="donors" class="choices"></div></fieldset>
+<fieldset><legend class="section-label"><em>03</em> Print location</legend><div id="targets" class="targets"></div></fieldset>
+<button id="print" class="print" type="submit"><span aria-hidden="true">▧</span> Make copy <span aria-hidden="true">↗</span></button>
+<div id="status" role="status" aria-live="polite">Ready. Feedstock passes one trait to the copy.</div>
+</form></aside></div>
+<footer><span>BLOCKROOMS <span class="slash">/</span> EXPERIMENTAL EQUIPMENT</span><span id="snapshot">512-GRAIN TRANSFER</span></footer>
+</main><script type="module" src="app.js"></script></body></html>

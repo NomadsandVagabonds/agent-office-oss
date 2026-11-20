@@ -40,6 +40,26 @@ test('construction and snapshots cannot mutate inventory contents or item defini
   assert.throws(() => makeItem('chalk', 'bad', { uses: 7 }), RangeError);
 });
 
+test('a finished carbon print spends a charge on its own equipped camera and a standard pack refills it', () => {
+  const bag = createInventory();
+  bag.add(item('carbon-camera', 'folding'));
+  bag.add(item('battery', 'cells'));
+  const refs = [{ slot: 1, id: 'cells' }, { slot: 0, id: 'folding' }];
+  unchanged(bag, () => bag.craft(refs), 'full-charge');
+  assert.equal(bag.spendPrint('other-camera'), false);
+  bag.select(1);
+  assert.equal(bag.spendPrint('folding'), false);
+  bag.select(0);
+  for (let i = 0; i < 4; i++) assert.equal(bag.spendPrint('folding'), true);
+  assert.equal(bag.spendPrint('folding'), false);
+  const dropped = bag.remove('folding');
+  assert.equal(dropped.charge, 0);
+  bag.add(dropped);
+  assert.equal(bag.craft(refs).recipe, 'copier-battery');
+  assert.equal(bag.read().slots[0].charge, 4);
+  assert.equal(bag.read().slots[1], null);
+});
+
 test('selection follows numbered slots and a dropped torch preserves charge while turning off', () => {
   const model = createInventory();
   model.add(item('battery', 'cell')); model.add(item('torch', 'torch', { charge: 70 }));

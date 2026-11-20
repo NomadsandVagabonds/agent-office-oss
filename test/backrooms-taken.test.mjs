@@ -205,6 +205,18 @@ function floorSetup(t) {
   return { model, physical, room, me };
 }
 
+test('consuming a photographed pickup removes only that item, including its interaction', t => {
+  const {physical,room}=floorSetup(t);
+  for(const [id,x] of [['source',.6],['neighbor',1.0]]){
+    assert.ok(physical.spawn(makeItem('battery',id),{room,x,z:0}).ok);
+  }
+  assert.ok(physical.takePickupAway('source','print'));
+  assert.equal(physical.takePickupAway('source','print'),false);
+  assert.deepEqual(room.uses.map(u=>u.when()),[false,true]);
+  physical.bringBack('print');
+  assert.deepEqual(room.uses.map(u=>u.when()),[true,true]);
+});
+
 test('what is lying in a room that goes, goes with it: a thing put down cannot be picked up from the room that is there instead, and is back when its own room is', (t) => {
   const { model, physical, room } = floorSetup(t);
   assert.equal(physical.spawn(makeItem('battery', 'near'), { room: 'room', x: 0.6, z: 0 }).ok, true);

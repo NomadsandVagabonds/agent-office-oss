@@ -206,6 +206,7 @@ async function visit(office, opt) {
   // (finger: a thumb has no mouse button. Its hand, with nothing in front of it to use, is the two hands a click is)
   const useIt = (how) => {
     if (!canAct() || inventory?.isOpen) return;
+    if (cur?.env.carbonCopy?.aiming && inventory?.held()?.type === 'carbon-camera') { cur.env.carbonCopy.shutter(); return; }
     if (cur?.env.grip?.action(currentUse)) { cur.env.grip.use(); return; }
     if (currentUse) { const use = currentUse; try { use.use(use); } catch (err) { console.warn('[backrooms] use', err); } return; }
     if (how?.finger) clickIt();
@@ -232,6 +233,7 @@ async function visit(office, opt) {
   // A click: the scissors, if they are in the hand; otherwise both hands, out in front (shove.rule.js).
   const clickIt = () => {
     if (!canAct() || inventory?.isOpen) return;
+    if (inventory?.held()?.type === 'carbon-camera') return;
     if (inventory?.held()?.type === 'scissors') { inventory.snip({ quietMiss: true }); return; }
     if (inventory?.held()?.type === 'extinguisher') { cur?.env.extinguisher?.press(); return; }   // (a burst: held, it goes on)
     if (inventory?.held()?.type === 'flamingo') { inventory.stab({ quietMiss: true }); return; }     // (one stab, and it stays in)
@@ -243,6 +245,8 @@ async function visit(office, opt) {
     interceptKey: event => paused ? !!menu?.handleKey(event) : !!inventory?.handleKey(event),
     blocked: () => paused || !!inventory?.isOpen,
     menu: () => setPaused(true), use: useIt, light: thumbLight, click: clickIt, wheel: () => {},
+    raiseView: () => canAct() && !inventory?.isOpen && inventory?.held()?.type === 'carbon-camera' && cur?.env.carbonCopy?.raise('pointer'),
+    lowerView: () => cur?.env.carbonCopy?.lower('pointer'),
     // the right button: with the extinguisher in the hand, its foot (extinguisher.js smash); otherwise nothing
     smash: () => { if (canAct() && !inventory?.isOpen && inventory?.held()?.type === 'extinguisher') cur?.env.extinguisher?.smash?.(); },
     key(k) {
@@ -342,6 +346,7 @@ async function visit(office, opt) {
       const { prepareFurnitureStudy } = await import('./furniture-study.js');
       prepareFurnitureStudy(level, builders);
     }
+    if (opt.debug && level === first) opt.dev?.prepareRoom?.(level, builders);
     if (opt.dev?.bridgeStudy && level === first) {
       const { prepareBridgeStudy } = await import('./bridge-study.js');
       prepareBridgeStudy(level, builders);
@@ -711,7 +716,7 @@ async function visit(office, opt) {
     env.extinguisher?.update(dt, !!input.state.firing && canAct() && !inventory?.isOpen);   // (squeezed and held: it goes on spraying past the burst)
     currentUse = canAct() && !inventory?.isOpen ? world.usable(me) : null;
     const grip = env.grip, furniture = grip?.action(currentUse);
-    hud.hint(!!currentUse || !!furniture, furniture ? grip.blocked ? 'Find space to set down' : `E · ${grip.held ? 'Set down' : 'Move'} ${furniture.label || furniture.type}` : 'E', !!furniture);
+    hud.hint(!env.carbonCopy?.aiming && (!!currentUse || !!furniture), furniture ? grip.blocked ? 'Find space to set down' : `E · ${grip.held ? 'Set down' : 'Move'} ${furniture.label || furniture.type}` : 'E', !!furniture);
     hud.tipHint(grip?.held?.bridge ? performance.now() < tipUntil && tipNote || `R · ${grip.held.deployed ? 'Raise' : 'Lower'} panel` : '');
 
     // the camcorder copes with the dark: more gain (and more noise), then its little lamp
@@ -913,6 +918,7 @@ async function visit(office, opt) {
     finish: (why) => finish(why),
     // ?debug only: __backrooms.dev.help() lists these
     ...(opt.debug ? { dev: {
+      viewCamera: camera,
       help: () => 'god(on) · clock(on) · give(type, more) · spawn(id) · tape() · report() · where() is on the handle · &perf=1 in the address for the frame rate',
       god(on = !devState.god) { devState.god = !!on; return devState.god; },
       clock(on = devState.stopClock) { devState.stopClock = !on; return !devState.stopClock; },
